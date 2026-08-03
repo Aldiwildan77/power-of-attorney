@@ -27,9 +27,12 @@ jobs:
           python - <<'PY'
           import glob, sys
           import pypdfium2 as pdfium
+          from templates import TEMPLATES
 
+          expected = 2 * len(TEMPLATES)  # every type, filled and blank
           files = sorted(glob.glob("out/**/*.pdf", recursive=True))
-          assert len(files) == 30, f"expected 30 PDFs, got {len(files)}"
+          if len(files) != expected:
+              sys.exit(f"expected {expected} PDFs, got {len(files)}")
           long = [(f, len(pdfium.PdfDocument(f))) for f in files
                   if len(pdfium.PdfDocument(f)) != 1]
           if long:
