@@ -57,6 +57,12 @@ PARTY_LABELS = {
     "phone": "No. Telepon",
 }
 BLANK_EXTRA = ["birth", "occupation", "position", "phone"]
+# Faces built into every PDF reader: label and the matching bold.
+LETTER_FONTS = {
+    "Times-Roman": ("Times New Roman (lazim di surat dinas)", "Times-Bold"),
+    "Courier": ("Courier (mesin tik)", "Courier-Bold"),
+    "Helvetica": ("Helvetica / Arial", "Helvetica-Bold"),
+}
 SHARED_ADDRESS = ("address", "rt_rw", "village", "district", "city", "province")
 COOKIE = "sk_details_v1"
 COOKIE_TEMPLATE = "sk_template_v1"
@@ -184,6 +190,12 @@ div[data-baseweb="input"]:focus-within, div[data-baseweb="textarea"]:focus-withi
 }
 .sk-note b { color: var(--cap); font-weight: 500; }
 
+/* ---- legal wording: typewriter, the way a filing reads ----------------- */
+.stTextArea textarea {
+  font-family: 'Courier New', 'IBM Plex Mono', monospace !important;
+  font-size: 0.86rem !important; line-height: 1.5;
+}
+
 /* ---- one-line facts; the detail hides behind the (i) ------------------- */
 .sk-line {
   font-size: 0.92rem; color: #1C2430; margin: 0 0 .5rem;
@@ -226,7 +238,8 @@ def rule(label: str) -> None:
 # belong to one document, not to your setup.
 REMEMBERED_DOCUMENT = ("type", "place", "substitution_right", "valid_until",
                        "footnote")
-REMEMBERED_LAYOUT = ("paper", "font_size", "fit_one_page")
+REMEMBERED_LAYOUT = ("paper", "font_size", "fit_one_page",
+                     "font", "font_bold")
 COOKIE_LIMIT = 3500  # browsers cap a cookie at about 4 KB, headers and all
 
 
@@ -797,6 +810,16 @@ with form_col:
                                  index=list(PAGE_SIZES).index(
                                      str(layout.get("paper", "A4")).upper()),
                                  key=f"paper_{rev}")
+            font_face = st.selectbox(
+                "Huruf surat", list(LETTER_FONTS),
+                index=list(LETTER_FONTS).index(
+                    str(layout.get("font", "Times-Roman"))
+                    if layout.get("font") in LETTER_FONTS else "Times-Roman"),
+                format_func=lambda f: LETTER_FONTS[f][0], key=f"face_{rev}",
+                help="Surat dinas Indonesia lazimnya Times New Roman atau "
+                     "Arial. Courier meniru mesin tik dan dipakai di berkas "
+                     "pengadilan Amerika, jadi terlihat tidak biasa di loket "
+                     "sini, tapi tersedia kalau memang diminta.")
         with s2:
             font_size = st.slider("Ukuran font", 9.0, 13.0,
                                   float(layout.get("font_size", 11)), step=0.5,
@@ -846,7 +869,8 @@ cfg = {
     "esign": {"anchors": anchors, "fields_json": want_json,
               "signature_fields": want_fields},
     "layout": {"paper": paper, "font_size": font_size,
-               "fit_one_page": fit_one_page},
+               "fit_one_page": fit_one_page,
+               "font": font_face, "font_bold": LETTER_FONTS[font_face][1]},
 }
 if len(types) == 1 and purpose is not None:
     cfg["document"]["purpose"] = purpose

@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import argparse
 import datetime as _dt
+import io
 import json
 import re
 import sys
@@ -607,16 +608,27 @@ class LetterBuilder:
 
         return story
 
-    @staticmethod
-    def _story_height(story: list, width: float, height: float) -> float:
-        total = 0.0
-        for flowable in story:
-            try:
-                total += flowable.wrap(width, height)[1]
-                total += flowable.getSpaceBefore() + flowable.getSpaceAfter()
-            except Exception:  # exotic flowable -> leave out of the estimate
-                pass
-        return total
+    def _template(self, target, page, margin, margin_top, principal):
+        return SimpleDocTemplate(
+            target, pagesize=page,
+            leftMargin=margin, rightMargin=margin,
+            topMargin=margin_top, bottomMargin=margin,
+            title=f"Surat Kuasa - {principal.get('name', '')}",
+            author=principal.get("name", ""), subject="Surat Kuasa",
+        )
+
+    def _pages_for(self, scale: float, size: float, page, margin, margin_top,
+                   principal) -> tuple[int, bytes]:
+        """Render to memory and report how many pages it actually took.
+
+        Estimating the height from the flowables was close for Times and wrong
+        for wider faces like Courier, so the fit is measured by rendering.
+        """
+        buffer = io.BytesIO()
+        doc = self._template(buffer, page, margin, margin_top, principal)
+        self.areas.clear()
+        doc.build(self._story(doc.width, scale, size))
+        return doc.page, buffer.getvalue()
 
     def build(self, output: Path) -> Path:
         cfg = self.cfg
@@ -634,42 +646,31 @@ class LetterBuilder:
         margin_top = float(get(cfg, "layout.margin_top_cm", 2.5)) * cm
 
         output.parent.mkdir(parents=True, exist_ok=True)
-        doc = SimpleDocTemplate(
-            str(output), pagesize=page,
-            leftMargin=margin, rightMargin=margin,
-            topMargin=margin_top, bottomMargin=margin,
-            title=f"Surat Kuasa - {principal.get('name', '')}",
-            author=principal.get("name", ""), subject="Surat Kuasa",
-        )
+        self.page_size = (page[0], page[1])
 
-        # Auto-fit: tighten gaps, then shrink the font, so the signature block
-        # never ends up stranded alone on a second page.
+        # Auto-fit: tighten the gaps, then step the font down, so the signature
+        # block never ends up stranded alone on a second page.
         if bool(get(cfg, "layout.fit_one_page", True)):
-            story = None
-            # The estimate always runs a little under the rendered height
-            # (inter-flowable spacing inside the Frame), hence the slack.
-            budget = doc.height - 1.1 * cm
             min_size = float(get(cfg, "layout.font_size_min", 8.5))
             sizes = [self.base_size]
             while sizes[-1] - 0.5 >= min_size:
                 sizes.append(round(sizes[-1] - 0.5, 1))
 
+            pdf = None
             for size in sizes:
                 for scale in (1.0, 0.85, 0.7, 0.55, 0.4):
-                    candidate = self._story(doc.width, scale, size)
-                    if self._story_height(candidate, doc.width, doc.height) <= budget:
-                        story = candidate
-                        break
-                if story is not None:
-                    break
-            if story is None:  # content genuinely needs more than one page
-                story = self._story(doc.width, 0.85, sizes[-1])
-        else:
-            story = self._story(doc.width, 1.0)
+                    pages, data = self._pages_for(scale, size, page, margin,
+                                                  margin_top, principal)
+                    pdf = data  # keep the tightest attempt as the fallback
+                    if pages == 1:
+                        output.write_bytes(data)
+                        return output
+            output.write_bytes(pdf)  # genuinely needs more than one page
+            return output
 
-        self.areas.clear()  # only the story that actually gets drawn counts
-        doc.build(story)
-        self.page_size = (doc.pagesize[0], doc.pagesize[1])
+        _, data = self._pages_for(1.0, self.base_size, page, margin,
+                                  margin_top, principal)
+        output.write_bytes(data)
         return output
 
 

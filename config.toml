@@ -100,6 +100,9 @@ pattern = "surat-kuasa-{type}.pdf"
 paper = "A4"             # A4 | F4 | LETTER | LEGAL
 margin_cm = 2.5
 margin_top_cm = 2.5
+# Times-Roman | Courier | Helvetica (built into every PDF reader).
+# Indonesian official letters normally use Times New Roman or Arial; Courier is
+# the typewriter face used in US court filings, available if you want it.
 font = "Times-Roman"
 font_bold = "Times-Bold"
 font_size = 11

@@ -236,14 +236,17 @@ yourself - the text of each lives in `templates.py`.
   under the name in the signature block; `blank` / `blank_fields` drive the
   fill-in form.
 - `[output]` - defaults only: `dir` and `pattern`. `-o` and `-d` override them.
-- `[layout]` - `paper` (`A4` | `F4` | `LETTER` | `LEGAL`), margins, font,
-  `font_size`, `signature_space_cm`.
+- `[layout]` - `paper` (`A4` | `F4` | `LETTER` | `LEGAL`), margins,
+  `font` / `font_bold` (`Times-Roman`, `Courier` or `Helvetica`), `font_size`,
+  `signature_space_cm`.
 
 ### Single-page auto-fit
 
 `[layout].fit_one_page` (default `true`) first tightens the gaps between
 blocks, then steps the font down to `font_size_min` (default 8.5) so the
-signature block never ends up stranded on a second page. Raise `font_size_min`
+signature block never ends up stranded on a second page. Each candidate is
+rendered and its page count read back, so a wide face like Courier is measured
+rather than guessed. Raise `font_size_min`
 if you would rather have two pages than small type, or set `fit_one_page` to
 `false` to keep the spacing and font exactly as configured.
 
