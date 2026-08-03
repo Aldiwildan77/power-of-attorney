@@ -57,7 +57,6 @@ PARTY_LABELS = {
     "phone": "No. Telepon",
 }
 BLANK_EXTRA = ["birth", "occupation", "position", "phone"]
-ZOOM_STEPS = {"Muat": 1, "1,5x": 1.5, "2x": 2, "3x": 3}
 # Faces built into every PDF reader: label and the matching bold.
 LETTER_FONTS = {
     "Times-Roman": ("Times New Roman (lazim di surat dinas)", "Times-Bold"),
@@ -188,9 +187,6 @@ div[data-baseweb="input"]:focus-within, div[data-baseweb="textarea"]:focus-withi
   display: block;
 }
 [data-testid="stDialog"] .sk-sheet img { max-height: none; width: 100% !important; }
-[data-testid="stVerticalBlockBorderWrapper"] .sk-sheet img {
-  max-height: none; width: auto !important;
-}
 .sk-note {
   font-size: 0.8rem; color: var(--muted); margin: 0.3rem 0 0;
 }
@@ -624,20 +620,6 @@ def party_form(role: str, title: str, data: dict, rev: int,
     k = lambda field: f"{role}_{field}_{rev}"  # noqa: E731
 
     profiles = profiles or []
-    if profiles:
-        names = [p.get("label", "Tanpa nama") for p in profiles]
-        pick, act = st.columns([3, 2])
-        with pick:
-            chosen = st.selectbox("Profil tersimpan", ["-"] + names,
-                                  key=k("profile_pick"),
-                                  label_visibility="visible")
-        with act:
-            st.markdown("<div style='height:1.55rem'></div>",
-                        unsafe_allow_html=True)
-            if chosen != "-" and st.button("Pakai profil", key=k("profile_use"),
-                                           use_container_width=True):
-                st.session_state["load_profile"] = (role, names.index(chosen))
-                st.rerun()
 
     blank = st.checkbox("Kosongkan - diisi tangan nanti",
                         value=bool(data.get("blank")), key=k("blank"),
@@ -690,16 +672,28 @@ def party_form(role: str, title: str, data: dict, rev: int,
         "Tulis NIK di bawah nama pada tanda tangan",
         value=bool(data.get("show_nik_on_signature", False)), key=k("niksig"))
 
-    n1, n2 = st.columns([3, 2])
+    names = [p.get("label", "") for p in profiles if p.get("label")]
+    n1, n2, n3 = st.columns([3, 1.4, 1.4])
     with n1:
-        label = st.text_input("Simpan sebagai profil",
-                              value=out.get("name", ""), key=k("profile_name"),
-                              placeholder="mis. Diri sendiri, Ibu, Kantor")
+        label = st.selectbox(
+            "Profil di perangkat ini", names, index=None,
+            key=k("profile_name"), accept_new_options=True,
+            placeholder="Pilih profil, atau ketik nama baru",
+            help="Pilih yang tersimpan lalu Pakai untuk mengisi form ini. "
+                 "Ketik nama baru lalu Simpan untuk menambah; nama yang sama "
+                 "akan ditimpa.")
+    named = (label or "").strip()
     with n2:
         st.markdown("<div style='height:1.55rem'></div>", unsafe_allow_html=True)
-        if st.button("Simpan profil", key=k("profile_save"),
-                     use_container_width=True, disabled=not label.strip()):
-            st.session_state["save_profile"] = (label.strip(), dict(out))
+        if st.button("Pakai", key=k("profile_use"), use_container_width=True,
+                     disabled=named not in names):
+            st.session_state["load_profile"] = (role, names.index(named))
+            st.rerun()
+    with n3:
+        st.markdown("<div style='height:1.55rem'></div>", unsafe_allow_html=True)
+        if st.button("Simpan", key=k("profile_save"), use_container_width=True,
+                     disabled=not named):
+            st.session_state["save_profile"] = (named, dict(out))
             st.rerun()
     return out
 
@@ -1063,6 +1057,10 @@ with form_col:
             help="Butuh pyhanko terpasang di server." if not esign.have_pyhanko()
                  else "Kotak klik-untuk-tanda-tangan di Acrobat.")
 
+    rule("Buat surat")
+    # Filled in after the config is assembled, a few lines below.
+    action_slot = st.container()
+
 # --------------------------------------------------------------------------- #
 # Assemble the config from the form
 # --------------------------------------------------------------------------- #
@@ -1121,19 +1119,25 @@ def show_fullscreen(toml_text: str, doc_type: str) -> None:
 # reachable no matter how far the form is scrolled.
 # --------------------------------------------------------------------------- #
 
-with preview_col:
-    st.markdown('<div class="sk-eyebrow">Pratinjau langsung</div>',
-                unsafe_allow_html=True)
-
+with action_slot:
     if missing:
         st.warning(f"Isi nama {' dan '.join(missing)}, atau centang "
                    "\"Kosongkan\" untuk mencetak blanko.")
     elif not types:
         st.warning("Pilih dulu jenis suratnya.")
 
-    if st.button("Buat surat", type="primary", use_container_width=True,
-                 disabled=not ready):
-        with st.spinner("Membuat dokumen…"):
+    a1, a2 = st.columns([2, 3])
+    with a1:
+        go = st.button("Buat surat", type="primary", use_container_width=True,
+                       disabled=not ready)
+    with a2:
+        st.checkbox("Ingat data ini di perangkat ini", value=True,
+                    key=f"remember_{rev}",
+                    help="Disimpan sebagai cookie di browser ini, bukan di "
+                         "server. Bisa dihapus lewat sidebar.")
+
+    if go:
+        with st.spinner("Membuat dokumen..."):
             st.session_state["files"] = build_documents(
                 dict(cfg), types, want_json, want_fields)
         if st.session_state.get(f"remember_{rev}", True):
@@ -1159,17 +1163,43 @@ with preview_col:
                 mime="text/plain", use_container_width=True,
                 help="Simpan di perangkatmu; muat lagi lewat sidebar, atau "
                      "pakai: python generate.py -c config.toml")
+        if len(files) > 1:
+            with st.expander(f"{len(files)} berkas dalam paket"):
+                for name, data in files:
+                    st.markdown(f'<p class="sk-note">{name} - '
+                                f'{len(data) / 1024:.1f} KB</p>',
+                                unsafe_allow_html=True)
 
-    st.checkbox("Ingat data ini di perangkat ini", value=True,
-                key=f"remember_{rev}",
-                help="Disimpan sebagai cookie di browser ini, bukan di server. "
-                     "Bisa dihapus lewat sidebar.")
+
+with preview_col:
+    st.markdown('<div class="sk-eyebrow">Pratinjau langsung</div>',
+                unsafe_allow_html=True)
+
+    if ready:
+        png = preview_image(cfg_toml, types[0])
+        if png:
+            st.markdown('<div class="sk-sheet">', unsafe_allow_html=True)
+            st.image(png, use_container_width=True)
+            st.markdown('</div>', unsafe_allow_html=True)
+            note = f"{TEMPLATES[types[0]]['label']} - halaman 1"
+            if len(types) > 1:
+                note += f" - {len(types) - 1} jenis lain ikut dibuat"
+            st.markdown(f'<p class="sk-note">{note}</p>', unsafe_allow_html=True)
+            if st.button("Layar penuh", use_container_width=True):
+                show_fullscreen(cfg_toml, types[0])
+        else:
+            st.markdown('<p class="sk-note">Pratinjau butuh pypdfium2 '
+                        '(<code>pip install pypdfium2</code>).</p>',
+                        unsafe_allow_html=True)
+    else:
+        st.markdown('<p class="sk-note">Pratinjau muncul setelah nama '
+                    'terisi.</p>', unsafe_allow_html=True)
 
     with st.expander("Bagikan setelan ini"):
         line("Tautan setelan, tanpa data pribadi.",
-             "Yang dibawa: jenis surat, tempat, materai, e-sign dan tata letak. "
-             "Nama, NIK dan alamat tidak ikut, karena tautan mengendap di "
-             "riwayat chat dan browser. Penerima mengisi datanya sendiri.")
+             "Yang dibawa: jenis surat, tempat, materai, teks kuasa, kop, "
+             "footer, e-sign dan tata letak. Nama, NIK dan alamat tidak ikut, "
+             "karena tautan mengendap di riwayat chat dan browser.")
         share_url = build_share_link(types, cfg)
         png = qr_png(share_url)
 
@@ -1180,8 +1210,7 @@ with preview_col:
             with q2:
                 line("Pindai atau simpan QR ini.",
                      "Memindainya membuka app dengan setelan yang sama, tanpa "
-                     "data pribadi. Simpan sebagai foto kalau perlu dipakai "
-                     "berulang.")
+                     "data pribadi.")
                 st.download_button("Unduh QR (PNG)", png,
                                    file_name="surat-kuasa-setelan.png",
                                    mime="image/png", use_container_width=True)
@@ -1190,63 +1219,19 @@ with preview_col:
                  f"({len(share_url)} karakter).",
                  "Satu QR menampung sekitar 2.900 byte menurut standarnya, "
                  "bukan batasan app ini. Tautannya tetap bisa disalin, atau "
-                 "kirim berkas config.toml. Memangkas teks kop, footer atau "
-                 "rincian wewenang akan mengecilkan tautannya.")
-
-        if len(share_url) > SHARE_LIMIT:
-            line(f"Tautan {len(share_url)} karakter, di atas batas aman.",
-                 "Sebagian browser dan aplikasi chat memotong tautan sepanjang "
-                 "ini. Kirim berkas config.toml saja untuk setelan sebesar itu.")
+                 "kirim berkas config.toml.")
 
         if st.checkbox("Lihat tautannya", key=f"show_link_{rev}"):
             st.code(share_url, language=None)
             line(f"Panjang {len(share_url)} karakter.",
-                 "Setelan dipadatkan dulu sebelum masuk tautan, jadi teks kop, "
-                 "footer dan rincian wewenang pun ikut tanpa membuat tautannya "
+                 "Setelan dipadatkan dulu sebelum masuk tautan, jadi teks "
+                 "kuasa, kop dan footer pun ikut tanpa membuat tautannya "
                  "meledak.")
 
         line("Surat jadi: kirim PDF. Data lengkap: kirim config.toml.",
              "Berkas lebih aman daripada tautan untuk data pribadi, karena "
              "tidak tertinggal di riwayat chat atau browser.")
 
-    if ready:
-        z1, z2 = st.columns([3, 2])
-        with z1:
-            zoom = st.select_slider("Perbesar", ZOOM_STEPS, value="Muat",
-                                    key=f"zoom_{rev}", label_visibility="collapsed")
-        with z2:
-            open_full = st.button("Layar penuh", use_container_width=True)
-
-        factor = ZOOM_STEPS[zoom]
-        png = preview_image(cfg_toml, types[0], scale=2 if factor == 1 else 3)
-        if png:
-            if factor == 1:
-                st.markdown('<div class="sk-sheet">', unsafe_allow_html=True)
-                st.image(png, use_container_width=True)
-                st.markdown('</div>', unsafe_allow_html=True)
-            else:
-                # Zoomed: a scroll box is what a magnifier should feel like.
-                with st.container(height=560):
-                    st.markdown('<div class="sk-sheet">', unsafe_allow_html=True)
-                    st.image(png, width=int(560 * factor))
-                    st.markdown('</div>', unsafe_allow_html=True)
-            note = f"{TEMPLATES[types[0]]['label']} · halaman 1"
-            if len(types) > 1:
-                note += f" · {len(types) - 1} jenis lain ikut dibuat"
-            st.markdown(f'<p class="sk-note">{note}</p>', unsafe_allow_html=True)
-            if open_full:
-                show_fullscreen(cfg_toml, types[0])
-        else:
-            st.markdown('<p class="sk-note">Pratinjau butuh pypdfium2 '
-                        '(<code>pip install pypdfium2</code>).</p>',
-                        unsafe_allow_html=True)
-
-    if files and len(files) > 1:
-        with st.expander(f"{len(files)} berkas dalam paket"):
-            for name, data in files:
-                st.markdown(f'<p class="sk-note">{name} - '
-                            f'{len(data) / 1024:.1f} KB</p>',
-                            unsafe_allow_html=True)
 
 # --------------------------------------------------------------------------- #
 # Signing and stamping: what to do with the PDF once it exists
