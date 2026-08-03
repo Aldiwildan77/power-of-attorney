@@ -36,9 +36,11 @@ opens the page at full size.
   document, not to your setup. "Lupakan data di perangkat ini" in the sidebar
   clears everything. You can also download a `config.toml`, keep it, and load it
   again later (that same file works with the CLI).
-- **Shareable setup link.** "Bagikan setelan ini" gives a URL carrying the
-  letter type, place, materai side, e-sign switches and page setup, so a
-  colleague opens the app already configured and fills in their own details.
+- **Shareable setup link, with a QR code.** "Bagikan setelan ini" gives a URL
+  carrying the letter type, place, materai side, e-sign switches and page setup,
+  so a colleague opens the app already configured and fills in their own
+  details. The same link is rendered as a QR code you can download or photograph
+  - handy for a counter, a group chat or a printed note.
   Names, NIK and addresses are never in the link: a URL survives in chat logs
   and browser history. To share a finished letter, send the PDF; to hand your
   full details to someone you trust, send the `config.toml` file instead.

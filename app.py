@@ -359,6 +359,34 @@ def build_share_link(types: list[str], cfg: dict) -> str:
     return f"{base}?{urlencode({k: v for k, v in params.items() if v})}"
 
 
+def qr_png(url: str, scale: int = 9, quiet: int = 4) -> bytes:
+    """Render the link as a QR code, so it can be saved as a picture.
+
+    reportlab already ships a QR encoder and Pillow comes with it, so this
+    needs nothing beyond what the letters themselves use.
+    """
+    from PIL import Image, ImageDraw
+    from reportlab.graphics.barcode import qr
+
+    widget = qr.QrCodeWidget(url, barLevel="M")
+    widget.draw()
+    code = widget.qr
+    n = code.getModuleCount()
+
+    size = (n + quiet * 2) * scale
+    image = Image.new("RGB", (size, size), "white")
+    pen = ImageDraw.Draw(image)
+    for row in range(n):
+        for col in range(n):
+            if code.isDark(row, col):
+                x, y = (col + quiet) * scale, (row + quiet) * scale
+                pen.rectangle([x, y, x + scale - 1, y + scale - 1], fill="black")
+
+    out = io.BytesIO()
+    image.save(out, format="PNG")
+    return out.getvalue()
+
+
 def setup_from_link() -> dict | None:
     """Turn ?t=skck&pa=F4&... into a config overlay, or None when absent."""
     try:
@@ -881,7 +909,22 @@ with preview_col:
                     'materai, e-sign dan tata letak. Nama, NIK dan alamat tidak '
                     'ikut - penerima tautan mengisi datanya sendiri.</p>',
                     unsafe_allow_html=True)
-        st.code(build_share_link(types, cfg), language=None)
+        share_url = build_share_link(types, cfg)
+        st.code(share_url, language=None)
+
+        png = qr_png(share_url)
+        q1, q2 = st.columns([1, 1])
+        with q1:
+            st.image(png, width=180)
+        with q2:
+            st.markdown('<p class="sk-note">Simpan atau foto QR ini. '
+                        'Memindainya membuka app dengan setelan yang sama, '
+                        'tanpa membawa data pribadi.</p>',
+                        unsafe_allow_html=True)
+            st.download_button("Unduh QR (PNG)", png,
+                               file_name="surat-kuasa-setelan.png",
+                               mime="image/png", use_container_width=True)
+
         st.markdown('<p class="sk-note">Mau berbagi surat yang sudah jadi? '
                     'Kirim PDF-nya langsung. Mau berbagi data lengkap dengan '
                     'orang yang kamu percaya? Kirim berkas config.toml, bukan '
