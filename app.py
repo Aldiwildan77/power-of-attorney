@@ -75,7 +75,7 @@ st.set_page_config(page_title="Surat Kuasa", page_icon="📄", layout="wide")
 
 CSS = """
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300;0,6..72,400;1,6..72,300&family=Public+Sans:wght@300;400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300;0,6..72,400;0,6..72,500;1,6..72,300&family=IBM+Plex+Mono:wght@400&display=swap');
 
 :root {
   --desk: #F4F6F9;
@@ -91,8 +91,11 @@ CSS = """
 }
 [data-testid="stHeader"] { background: transparent; }
 
-html, body, [data-testid="stAppViewContainer"] {
-  font-family: 'Public Sans', system-ui, -apple-system, sans-serif;
+html, body, [data-testid="stAppViewContainer"],
+[data-testid="stAppViewContainer"] input,
+[data-testid="stAppViewContainer"] textarea,
+[data-testid="stAppViewContainer"] button {
+  font-family: 'Newsreader', 'Times New Roman', Georgia, serif;
 }
 [data-testid="stAppViewContainer"] .block-container {
   padding-top: 2rem; padding-bottom: 4rem; max-width: 1440px;
@@ -100,8 +103,7 @@ html, body, [data-testid="stAppViewContainer"] {
 
 /* ---- masthead ---------------------------------------------------------- */
 .sk-eyebrow {
-  font-family: 'IBM Plex Mono', monospace;
-  font-size: 0.68rem; letter-spacing: 0.22em; text-transform: uppercase;
+  font-size: 0.7rem; letter-spacing: 0.2em; text-transform: uppercase;
   color: var(--muted);
 }
 .sk-title {
@@ -116,9 +118,8 @@ html, body, [data-testid="stAppViewContainer"] {
 .sk-rule { display: flex; align-items: center; gap: 0.75rem; margin: 1.9rem 0 0.7rem; }
 .sk-rule::after { content: ""; flex: 1; height: 0; border-top: 1px dashed var(--rule); }
 .sk-rule span {
-  font-family: 'IBM Plex Mono', monospace; font-size: 0.7rem;
-  letter-spacing: 0.2em; text-transform: uppercase; color: var(--muted);
-  white-space: nowrap;
+  font-size: 0.72rem; letter-spacing: 0.18em; text-transform: uppercase;
+  color: var(--muted); white-space: nowrap;
 }
 
 /* ---- inputs: the blanko's dotted fill-in line -------------------------- */
@@ -155,10 +156,8 @@ div[data-baseweb="input"]:focus-within, div[data-baseweb="textarea"]:focus-withi
 [data-testid="stExpander"] {
   border: 1px solid var(--rule); border-radius: 4px; background: var(--raised);
 }
-[data-baseweb="tag"] {
-  border-radius: 2px !important; font-family: 'IBM Plex Mono', monospace;
-  font-size: 0.72rem !important;
-}
+[data-baseweb="tag"] { border-radius: 2px !important; font-size: 0.8rem !important; }
+[data-testid="stCode"], code { font-family: 'IBM Plex Mono', monospace !important; }
 
 /* ---- the preview column sticks; the page scrolls as one ---------------- */
 [data-testid="stHorizontalBlock"] { align-items: flex-start; }
@@ -181,12 +180,23 @@ div[data-baseweb="input"]:focus-within, div[data-baseweb="textarea"]:focus-withi
 }
 [data-testid="stDialog"] .sk-sheet img { max-height: none; width: 100% !important; }
 .sk-note {
-  font-family: 'IBM Plex Mono', monospace; font-size: 0.68rem;
-  letter-spacing: 0.04em; color: var(--muted); margin: 0.35rem 0 0;
+  font-size: 0.8rem; color: var(--muted); margin: 0.3rem 0 0;
 }
 .sk-note b { color: var(--cap); font-weight: 500; }
-.sk-step { font-size: 0.86rem; color: #2C3543; margin: 0 0 .45rem; }
-.sk-step b { color: #141A23; font-weight: 600; }
+
+/* ---- one-line facts; the detail hides behind the (i) ------------------- */
+.sk-line {
+  font-size: 0.92rem; color: #1C2430; margin: 0 0 .5rem;
+  display: flex; align-items: baseline; gap: .4rem;
+}
+.sk-line b { font-weight: 500; }
+.sk-info {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 1.05em; height: 1.05em; border-radius: 50%;
+  border: 1px solid var(--rule); color: var(--muted);
+  font-size: .72rem; font-style: italic; cursor: help; flex: none;
+}
+.sk-info:hover { border-color: var(--tinta); color: var(--tinta); }
 
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; animation: none !important; }
@@ -194,6 +204,12 @@ div[data-baseweb="input"]:focus-within, div[data-baseweb="textarea"]:focus-withi
 }
 </style>
 """
+
+
+def line(text: str, tip: str = "") -> None:
+    """One short line; anything longer belongs behind the (i)."""
+    mark = (f'<span class="sk-info" title="{tip}">i</span>') if tip else ""
+    st.markdown(f'<p class="sk-line">{text}{mark}</p>', unsafe_allow_html=True)
 
 
 def rule(label: str) -> None:
@@ -591,9 +607,10 @@ st.markdown(CSS, unsafe_allow_html=True)
 st.markdown(
     '<div class="sk-eyebrow">Surat kuasa · perorangan</div>'
     '<h1 class="sk-title">Pilih suratnya, isi datanya, <em>unduh</em>.</h1>'
-    '<p class="sk-sub">Lima belas keperluan administrasi, format resmi, satu '
-    'halaman. Data disimpan di perangkatmu sendiri - server ini tidak menyimpan '
-    'apa pun.</p>',
+    '<p class="sk-sub">Format resmi, satu halaman.'
+    '<span class="sk-info" title="Enam belas jenis keperluan administrasi. '
+    'Data kamu disimpan di perangkat sendiri; server ini tidak menyimpan '
+    'apa pun dan tidak memakai basis data.">i</span></p>',
     unsafe_allow_html=True,
 )
 
@@ -622,12 +639,10 @@ with st.sidebar:
     st.markdown(f'<p class="sk-note">Sumber: {st.session_state["base_note"]}</p>',
                 unsafe_allow_html=True)
     if remembered:
-        kept = ", ".join(k for k in ("principal", "agent", "document",
-                                     "esign", "layout") if k in remembered)
-        st.markdown('<p class="sk-note">Diingat di perangkat ini - data diri, '
-                    'materai, e-sign dan tata letak terisi sendiri saat kamu '
-                    f'kembali.<br>Bagian tersimpan: {kept}.</p>',
-                    unsafe_allow_html=True)
+        line("Tersimpan di perangkat ini.",
+             "Data diri, materai, e-sign dan tata letak terisi sendiri saat "
+             "kamu kembali. Disimpan sebagai cookie di browser ini, bukan di "
+             "server.")
         if st.button("Lupakan data di perangkat ini", use_container_width=True):
             forget_on_device()
             st.session_state.pop("restored", None)
@@ -651,8 +666,9 @@ with st.sidebar:
             apply_base(dict(presets[pick]), f"contoh {pick}")
             st.rerun()
 
-    st.markdown('<p class="sk-note">Dari terminal: <code>python generate.py</code> '
-                'memakai config yang sama.</p>', unsafe_allow_html=True)
+    line("Ada juga versi terminal.",
+         "python generate.py memakai config yang sama, bisa membuat banyak "
+         "surat sekaligus dan menandatangani PDF dengan sertifikat sendiri.")
 
 base = st.session_state["base"]
 rev = st.session_state["form_rev"]
@@ -754,10 +770,9 @@ with form_col:
                         st.success(f"Tersimpan. Pilih jenis \"Custom\" untuk "
                                    f"memakai \"{tpl_label}\" lain kali.")
             if my_template:
-                st.markdown(
-                    f'<p class="sk-note">Template tersimpan: '
-                    f'{my_template.get("label", "Template saya")} - muncul saat '
-                    'jenis "Custom" dipilih.</p>', unsafe_allow_html=True)
+                line(f'Tersimpan: {my_template.get("label", "Template saya")}.',
+                     'Teks ini terisi sendiri setiap kali jenis "Custom" '
+                     'dipilih di perangkat ini.')
         else:
             purpose = powers_text = limits = None
             st.info("Beberapa jenis dipilih, jadi tiap surat memakai teks "
@@ -905,10 +920,10 @@ with preview_col:
                      "Bisa dihapus lewat sidebar.")
 
     with st.expander("Bagikan setelan ini"):
-        st.markdown('<p class="sk-note">Tautan ini membawa jenis surat, tempat, '
-                    'materai, e-sign dan tata letak. Nama, NIK dan alamat tidak '
-                    'ikut - penerima tautan mengisi datanya sendiri.</p>',
-                    unsafe_allow_html=True)
+        line("Tautan setelan, tanpa data pribadi.",
+             "Yang dibawa: jenis surat, tempat, materai, e-sign dan tata letak. "
+             "Nama, NIK dan alamat tidak ikut, karena tautan mengendap di "
+             "riwayat chat dan browser. Penerima mengisi datanya sendiri.")
         share_url = build_share_link(types, cfg)
         st.code(share_url, language=None)
 
@@ -917,18 +932,16 @@ with preview_col:
         with q1:
             st.image(png, width=180)
         with q2:
-            st.markdown('<p class="sk-note">Simpan atau foto QR ini. '
-                        'Memindainya membuka app dengan setelan yang sama, '
-                        'tanpa membawa data pribadi.</p>',
-                        unsafe_allow_html=True)
+            line("Simpan atau foto QR ini.",
+                 "Memindainya membuka app dengan setelan yang sama. Isinya "
+                 "sama persis dengan tautan di atas, tanpa data pribadi.")
             st.download_button("Unduh QR (PNG)", png,
                                file_name="surat-kuasa-setelan.png",
                                mime="image/png", use_container_width=True)
 
-        st.markdown('<p class="sk-note">Mau berbagi surat yang sudah jadi? '
-                    'Kirim PDF-nya langsung. Mau berbagi data lengkap dengan '
-                    'orang yang kamu percaya? Kirim berkas config.toml, bukan '
-                    'tautan.</p>', unsafe_allow_html=True)
+        line("Surat jadi: kirim PDF. Data lengkap: kirim config.toml.",
+             "Berkas lebih aman daripada tautan untuk data pribadi, karena "
+             "tidak tertinggal di riwayat chat atau browser.")
 
     if ready:
         png = preview_image(cfg_toml, types[0])
@@ -964,53 +977,47 @@ sign_col, stamp_col = st.columns(2, gap="large")
 with sign_col:
     st.markdown('<div class="sk-eyebrow">Tanda tangan elektronik</div>',
                 unsafe_allow_html=True)
-    st.markdown(
-        '<p class="sk-step"><b>Privy</b> - masuk ke akun Privy, unggah PDF-nya, '
-        'lalu seret kotak tanda tangan ke ruang kosong di atas nama. '
-        'Undang penerima kuasa lewat email/nomor HP-nya untuk ikut tanda '
-        'tangan.</p>'
-        '<p class="sk-step"><b>DocuSign / Adobe Acrobat Sign</b> - aktifkan '
-        '“Anchor tak terlihat” di atas sebelum membuat surat. Pada DocuSign '
-        'pakai <i>anchor string</i> <code>/ttd_pemberi/</code> dan '
-        '<code>/ttd_penerima/</code>; field tanda tangan menempel sendiri di '
-        'posisi yang benar tanpa menyeret apa pun.</p>'
-        '<p class="sk-step"><b>Lewat API</b> - aktifkan “Koordinat tanda '
-        'tangan”. Berkas <code>.fields.json</code> memuat halaman dan '
-        'kotak tiap area dalam dua sistem koordinat, siap dipakai untuk '
-        'DocuSign tabs atau endpoint sejenis.</p>',
-        unsafe_allow_html=True)
+    line("<b>Privy</b> - unggah PDF, taruh kotak tanda tangan.",
+         "Masuk ke akun Privy, unggah PDF-nya, seret kotak tanda tangan ke "
+         "ruang kosong di atas nama, lalu undang penerima kuasa lewat email "
+         "atau nomor HP-nya untuk ikut menandatangani.")
+    line("<b>DocuSign / Adobe Sign</b> - anchor otomatis.",
+         "Aktifkan Anchor tak terlihat sebelum membuat surat. Pakai anchor "
+         "string /ttd_pemberi/ dan /ttd_penerima/; field tanda tangan menempel "
+         "sendiri di posisi yang benar tanpa menyeret apa pun.")
+    line("<b>Lewat API</b> - koordinat siap pakai.",
+         "Aktifkan Koordinat tanda tangan. Berkas .fields.json memuat halaman "
+         "dan kotak tiap area dalam dua sistem koordinat, siap dipakai untuk "
+         "DocuSign tabs atau endpoint sejenis.")
 
 with stamp_col:
     st.markdown('<div class="sk-eyebrow">e-Meterai</div>', unsafe_allow_html=True)
-    st.markdown(
-        '<p class="sk-step">Ruang materai di surat ini sengaja dibiarkan '
-        '<b>kosong tanpa garis</b>, jadi e-meterai bisa ditempel persis di '
-        'situ tanpa menimpa apa pun - atau materai tempel dibubuhkan setelah '
-        'dicetak.</p>'
-        '<p class="sk-step"><b>Harga</b> - nominal meterai elektronik '
-        'Rp10.000 dan itu ditetapkan pemerintah; yang berbeda antar penjual '
-        'hanya biaya layanannya (sebagian distributor menambah sekitar '
-        'Rp2.500 per keping). Menawar di bawah Rp10.000 bukan penghematan: '
-        'DJP menyebut meterai di bawah nominal patut dicurigai palsu.</p>'
-        '<p class="sk-step"><b>Cara termurah</b> - beli langsung di distributor '
-        'resmi Peruri (daftarnya ada di situs Peruri) dan bandingkan biaya '
-        'layanannya, lalu bubuhkan sendiri lewat portal distributor tersebut. '
-        'Paket banyak keping biasanya menurunkan biaya layanan per '
-        'dokumen.</p>'
-        '<p class="sk-step"><b>Kapan boleh dilewati</b> - meterai hanya wajib '
-        'untuk dokumen yang dipakai sebagai alat bukti perdata. Banyak loket '
-        'administrasi menerima surat kuasa tanpa meterai; tanyakan dulu ke '
-        'instansi tujuan sebelum membeli.</p>',
-        unsafe_allow_html=True)
+    line("Ruang materai dibiarkan kosong tanpa garis.",
+         "Karena kosong, e-meterai bisa ditempel persis di situ tanpa menimpa "
+         "apa pun; kalau dicetak, materai tempel dibubuhkan di tempat yang sama.")
+    line("Harga nominal Rp10.000, beda hanya biaya layanan.",
+         "Nominal meterai elektronik ditetapkan pemerintah. Sebagian "
+         "distributor menambah sekitar Rp2.500 per keping. Menawar di bawah "
+         "Rp10.000 bukan penghematan: DJP menyebut meterai di bawah nominal "
+         "patut dicurigai palsu.")
+    line("Termurah: beli di distributor resmi Peruri.",
+         "Bandingkan biaya layanan antar distributor resmi, ambil paket banyak "
+         "keping kalau sering dipakai, lalu bubuhkan sendiri lewat portal "
+         "distributor tersebut.")
+    line("Kadang tidak wajib.",
+         "Meterai hanya wajib untuk dokumen yang dipakai sebagai alat bukti "
+         "perdata. Banyak loket administrasi menerima surat kuasa tanpa "
+         "meterai; tanyakan dulu ke instansi tujuan sebelum membeli.")
+
 
 # --------------------------------------------------------------------------- #
 # Footer
 # --------------------------------------------------------------------------- #
 
 st.markdown(
-    '<p class="sk-note" style="margin-top:2.5rem">Surat ini template, bukan '
-    'nasihat hukum. Sebagian instansi mewajibkan formulir kuasa versi mereka '
-    'sendiri - cek dulu ke loket tujuan. Dokumen dibuat sementara di memori '
-    'server lalu dihapus; tidak ada basis data.</p>',
+    '<p class="sk-note" style="margin-top:2.5rem">Template, bukan nasihat hukum.'
+    '<span class="sk-info" title="Sebagian instansi mewajibkan formulir kuasa '
+    'versi mereka sendiri, jadi cek dulu ke loket tujuan. Dokumen dibuat '
+    'sementara di memori server lalu dihapus.">i</span></p>',
     unsafe_allow_html=True,
 )
