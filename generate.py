@@ -108,7 +108,7 @@ def load_config(path: Path) -> dict:
 def dump_toml(data: dict) -> str:
     """Minimal TOML writer for the config shapes used here.
 
-    Enough for strings, numbers, booleans, string lists and nested tables —
+    Enough for strings, numbers, booleans, string lists and nested tables -
     which is all a config file holds. Comments are not preserved, so saving
     over a hand-written config trades its comments for the new values.
     """
@@ -196,7 +196,7 @@ def esc(value) -> str:
 class SignatureArea(Flowable):
     """Blank space kept for a signature (and the materai, when it sits here).
 
-    Nothing is drawn by default — a printed letter takes a wet signature and a
+    Nothing is drawn by default - a printed letter takes a wet signature and a
     physical stamp, an e-signed one gets its own overlay. What the area does do
     is record its exact position on the page and, when asked, drop an invisible
     anchor string there so e-sign platforms can place their fields on it.
@@ -306,7 +306,7 @@ class LetterBuilder:
         With `blank=True` every standard row is printed and unfilled values
         become dotted lines.
 
-        Returns (rows, left-column labels, right-column labels) — the label
+        Returns (rows, left-column labels, right-column labels) - the label
         lists drive column widths so labels never wrap.
         """
         rows, labels_left, labels_right = [], [], []
@@ -799,7 +799,7 @@ EDITABLE_FIELDS = ("name", "nik", "birth", "occupation", "address", "rt_rw",
 
 def edit_party(title: str, party: dict) -> dict:
     """Walk through one party's fields, Enter keeps the current value."""
-    print(f"\n{title} — press Enter to keep what is in brackets")
+    print(f"\n{title} - press Enter to keep what is in brackets")
     edited = dict(party)
     for field in EDITABLE_FIELDS:
         label = LABELS[field].rstrip(":")
@@ -835,7 +835,7 @@ def find_configs(default_config: Path) -> list[Path]:
 def interactive(default_config: Path) -> dict:
     """Ask a few questions in the terminal, return the choices."""
     print("=" * 58)
-    print("  Surat Kuasa generator — interactive")
+    print("  Surat Kuasa generator - interactive")
     print("  (press Enter to accept the value in brackets)")
     print("=" * 58)
 
@@ -883,7 +883,7 @@ def interactive(default_config: Path) -> dict:
 
     principal_name = cfg.get("principal", {}).get("name", "")
     agent_name = cfg.get("agent", {}).get("name", "")
-    print(f"\nCurrent details — principal: {principal_name or '(empty)'}, "
+    print(f"\nCurrent details - principal: {principal_name or '(empty)'}, "
           f"agent: {agent_name or '(empty)'}")
     edited = ask_yes("Edit them?", default_yes=not (principal_name and agent_name))
     if edited:
@@ -915,14 +915,14 @@ def interactive(default_config: Path) -> dict:
 
     def summarize(role, blank):
         name = cfg.get(role, {}).get("name", "")
-        return "(blank — fill in by hand)" if blank else (name or "(empty)")
+        return "(blank - fill in by hand)" if blank else (name or "(empty)")
 
     print("\n" + "-" * 58)
     print(f"  Config   : {cfg_path}")
     if batch:
-        print(f"  Letters  : {len(types)} documents — {', '.join(types)}")
+        print(f"  Letters  : {len(types)} documents - {', '.join(types)}")
     else:
-        print(f"  Letter   : {types[0]} — {TEMPLATES[types[0]]['label']}")
+        print(f"  Letter   : {types[0]} - {TEMPLATES[types[0]]['label']}")
     print(f"  Principal: {summarize('principal', blank_principal)}")
     print(f"  Agent    : {summarize('agent', blank_agent)}")
     print(f"  Place    : {place}")

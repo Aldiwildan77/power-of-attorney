@@ -3,7 +3,7 @@ output/
 *.pdf
 *.fields.json
 
-# Signing material — never commit these
+# Signing material - never commit these
 *.p12
 *.pfx
 *.pem

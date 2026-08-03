@@ -6,7 +6,7 @@ deleted. Whatever you type is kept in your own browser (a cookie) or in a
 `config.toml` you download. That makes every option below a plain "run one
 process" deploy.
 
-## Streamlit Community Cloud — free, least work
+## Streamlit Community Cloud - free, least work
 
 1. Push this repo to GitHub (public repo on the free tier).
 2. Go to share.streamlit.io → **Create app** → pick the repo, branch, and
@@ -17,7 +17,7 @@ process" deploy.
 Free apps sleep after a period without visitors and wake on the next request,
 so the first hit after idle takes a few seconds.
 
-## Hugging Face Spaces — free, no GitHub required
+## Hugging Face Spaces - free, no GitHub required
 
 The built-in Streamlit SDK is deprecated, so pick the **Docker** SDK; the
 `Dockerfile` in this repo is all it needs.
@@ -41,7 +41,7 @@ pinned: false
 
 ## Your own domain
 
-Community Cloud only gives you a subdomain — `something.streamlit.app`. A
+Community Cloud only gives you a subdomain - `something.streamlit.app`. A
 domain of your own means hosting the container somewhere else:
 
 | Host | Custom domain | Cost | Trade-off |
@@ -57,7 +57,7 @@ Render is the shortest path to `suratkuasa.example.com` at no cost:
 1. render.com → **New → Blueprint** → pick this repo. `render.yaml` sets the
    Docker runtime, the free plan, the Singapore region and the health check.
 2. Once it is live: service → **Settings → Custom Domains → Add**.
-3. At your DNS provider add what Render shows you — a `CNAME` for a subdomain
+3. At your DNS provider add what Render shows you - a `CNAME` for a subdomain
    (`suratkuasa` → `<service>.onrender.com`), or an `ALIAS`/`ANAME` plus the
    given `A` record for a bare domain.
 4. Wait for verification; the TLS certificate is issued automatically.
@@ -76,10 +76,10 @@ docker build -t surat-kuasa .
 docker run -p 8501:8501 surat-kuasa
 ```
 
-- **Fly.io** — `fly launch --no-deploy`, keep the Dockerfile, then `fly deploy`.
-- **Render / Railway** — new Web Service from the repo, Docker runtime, health
+- **Fly.io** - `fly launch --no-deploy`, keep the Dockerfile, then `fly deploy`.
+- **Render / Railway** - new Web Service from the repo, Docker runtime, health
   check path `/_stcore/health`.
-- **Cloud Run** — `gcloud run deploy --source .`; it honours `$PORT`.
+- **Cloud Run** - `gcloud run deploy --source .`; it honours `$PORT`.
 
 ## Before you go live
 

@@ -18,7 +18,7 @@ valid_until = ""         # optional, e.g. "Surat kuasa ini berlaku sampai dengan
 clause_label = "K H U S U S"
 footnote = ""            # optional, printed small and italic below the signatures
 
-# Override the template text (optional — comment out to use the template):
+# Override the template text (optional - comment out to use the template):
 # purpose = "Untuk mewakili Pemberi Kuasa dalam ..."
 # powers = [
 #   "Mengambil dokumen X.",
@@ -36,7 +36,7 @@ height_cm = 2.0
 image = ""               # optional PNG/JPG (e-meterai, scanned stamp) to paste in
 
 # -----------------------------------------------------------------------------
-# Pemberi Kuasa — the person granting the power (that's you).
+# Pemberi Kuasa - the person granting the power (that's you).
 [principal]
 name = "NAMA PEMBERI KUASA"
 nik = "1234 5678 9012 3456"
@@ -55,7 +55,7 @@ show_nik_on_signature = false   # print the NIK under the name in the signature 
 blank = false            # true = print dotted lines instead of the data
 
 # -----------------------------------------------------------------------------
-# Penerima Kuasa — the person receiving the power.
+# Penerima Kuasa - the person receiving the power.
 [agent]
 name = "NAMA PENERIMA KUASA"
 nik = "2345 6789 0123 4567"
@@ -90,7 +90,7 @@ fields_json = false      # write <name>.fields.json with the signature coordinat
 signature_fields = false # empty AcroForm signature fields (needs pyhanko)
 
 # -----------------------------------------------------------------------------
-# Defaults only — -o (path/pattern) and -d (folder) win over these.
+# Defaults only - -o (path/pattern) and -d (folder) win over these.
 [output]
 dir = "output"
 # Placeholders: {type} {date} {principal} {agent}

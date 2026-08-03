@@ -251,6 +251,18 @@ TEMPLATES = {
         ],
         "limits": GENERAL_LIMITS,
     },
+    "custom": {
+        "label": "Custom - tulis sendiri",
+        "purpose": (
+            "Untuk mewakili Pemberi Kuasa dalam mengurus keperluan sebagaimana "
+            "diuraikan di bawah ini."
+        ),
+        "powers": [
+            "Menyerahkan dan mengambil dokumen yang diperlukan.",
+            "Menandatangani formulir dan tanda terima administrasi.",
+        ],
+        "limits": GENERAL_LIMITS,
+    },
     "umum": {
         "label": "Administrasi Umum",
         "purpose": (

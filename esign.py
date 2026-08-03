@@ -2,12 +2,12 @@
 
 Three levels, cheapest first:
 
-1. `write_fields_json` — a sidecar JSON listing every signature area with its
+1. `write_fields_json` - a sidecar JSON listing every signature area with its
    page and coordinates (both PDF and top-left origin) plus the anchor string.
    Feed it to the DocuSign/Privy/Adobe Sign API instead of guessing positions.
-2. `add_signature_fields` — empty AcroForm signature fields placed on those
+2. `add_signature_fields` - empty AcroForm signature fields placed on those
    areas, so Acrobat and friends show a "click to sign" box.
-3. `sign_pades` — actually sign the PDF with a PKCS#12 certificate.
+3. `sign_pades` - actually sign the PDF with a PKCS#12 certificate.
 
 Steps 2 and 3 need pyhanko: pip install pyhanko
 """

@@ -28,11 +28,18 @@ and the actions stay in view while you fill the form. The preview re-renders as
 you type (cached, so an unchanged form costs nothing); "Lihat layar penuh"
 opens the page at full size.
 
-- **It remembers you.** Tick "Ingat data ini di perangkat ini" and your details
-  come back next visit — stored as a compressed cookie in your own browser, not
-  in a database. "Lupakan data di perangkat ini" in the sidebar clears it. You
-  can also download a `config.toml`, keep it, and load it again later (that same
-  file works with the CLI).
+- **It remembers your whole setup.** Tick "Ingat data ini di perangkat ini" and
+  both parties, the place of signing, the materai side, the e-sign switches
+  (anchors, `.fields.json`, AcroForm fields) and the page setup all come back
+  next visit - compressed into a cookie in your own browser, never a database.
+  A letter number and a fixed date are deliberately left out; they belong to one
+  document, not to your setup. "Lupakan data di perangkat ini" in the sidebar
+  clears everything. You can also download a `config.toml`, keep it, and load it
+  again later (that same file works with the CLI).
+- **Write your own letter.** Pick the `custom` type, write the purpose, the
+  numbered powers and the limits, then "Simpan teks ini di perangkat" keeps that
+  wording on your device under a name you choose. It reappears the next time you
+  pick `custom`.
 - **Less typing.** "Alamat sama dengan pemberi kuasa" copies the address across,
   the place of signing defaults to your city, and a NIK that isn't 16 digits is
   flagged as you type.
@@ -48,14 +55,14 @@ logged.
 
 ### Deploying it for free
 
-- **Streamlit Community Cloud** — point it at the GitHub repo, main file
+- **Streamlit Community Cloud** - point it at the GitHub repo, main file
   `app.py`. It reads `requirements.txt` by itself. Free tier sleeps when idle
   and wakes on the next visit.
-- **Hugging Face Space** — create a Space with SDK `streamlit`, push these
+- **Hugging Face Space** - create a Space with SDK `streamlit`, push these
   files, done. Same `requirements.txt`.
 
 Both run the app on someone else's server, so the NIK and addresses typed into
-the form travel over the network (as they already do with any Streamlit app —
+the form travel over the network (as they already do with any Streamlit app -
 widget values go to the server process). Nothing is stored there: no database,
 no files, no logs of the form. For sensitive data, run `streamlit run app.py`
 locally or use the CLI, and then nothing leaves the machine at all.
@@ -69,13 +76,13 @@ python generate.py            # no arguments -> interactive menu
 ```
 
 The menu asks, in order: which config holds your details (`config.toml` plus
-anything in `examples/`), which letter you need (numbered 1–15; comma-separated
+anything in `examples/`), which letter you need (numbered 1-15; comma-separated
 for several, or type `all`), whether the agent's / your own details should be
 left blank, whether to edit the details (field by field, Enter keeps the
 current value), place, date, and the output folder. Press Enter to accept the
 value in brackets.
 
-After editing it offers to save everything back to a config file — the same one
+After editing it offers to save everything back to a config file - the same one
 or a new name. Saving rewrites the file from the values, so a hand-written
 config trades its comments for the new data; it asks before overwriting.
 
@@ -120,7 +127,7 @@ python generate.py --all -d output/blank-forms
 `{agent}` work too. Without a `{type}` placeholder the type code is appended to
 the file name (`sk.pdf` -> `sk-skck.pdf`, `sk-bank.pdf`, …) so nothing gets
 overwritten. Custom `purpose` / `powers` / `limits` in the config are skipped
-in batch runs — each letter uses its own template text — and the reason is
+in batch runs - each letter uses its own template text - and the reason is
 printed to stderr.
 
 ## Blank forms
@@ -155,12 +162,12 @@ python generate.py -t skck --esign
 
 That produces three things:
 
-- **Invisible anchor strings** on each signature area — `/ttd_pemberi/` and
+- **Invisible anchor strings** on each signature area - `/ttd_pemberi/` and
   `/ttd_penerima/` by default (configurable). They are never printed (PDF text
   render mode 3) but are extractable, which is what DocuSign `anchorString` and
   Adobe Sign text tags look for.
 - **`<name>.fields.json`** next to the PDF, listing every signature area with
-  its page and rectangle in both coordinate systems — `rect` (origin
+  its page and rectangle in both coordinate systems - `rect` (origin
   bottom-left, for Acrobat/pyHanko) and `rect_top_left` (origin top-left, for
   DocuSign tabs, Privy and web viewers). Feed it to the API instead of guessing
   positions.
@@ -178,7 +185,7 @@ python generate.py -t skck --esign --sign cert.p12 --sign-as principal
 Signs with your PKCS#12 certificate; the result validates as intact and
 covering the whole file. The other party's field stays empty for a
 counter-signature. Passphrase resolution order: `--sign-pass`, then the
-`PKCS12_PASSPHRASE` env var, then an interactive prompt — prefer the last two,
+`PKCS12_PASSPHRASE` env var, then an interactive prompt - prefer the last two,
 since a passphrase on the command line is visible to other processes on the
 machine.
 
@@ -186,7 +193,7 @@ machine.
 
 The e-meterai nominal is fixed at Rp10.000 by the government; what differs
 between sellers is the service fee on top (some official distributors add about
-Rp2.500 per stamp). Anything cheaper than the nominal is a red flag — the tax
+Rp2.500 per stamp). Anything cheaper than the nominal is a red flag - the tax
 office warns that below-nominal meterai are likely counterfeit. So the cheapest
 honest route is to buy from an official Peruri distributor with the lowest
 service fee, in a bundle if you need several, and affix it yourself. Meterai is
@@ -203,24 +210,25 @@ rectangle shows up in `.fields.json` as the area flagged `holds_stamp`. Set
 
 `dukcapil`, `bpjs_tk`, `bpjs_kes`, `pajak`, `imigrasi`, `skck`, `kendaraan`,
 `bank`, `hr`, `pendidikan`, `asuransi`, `instansi`, `utilitas`,
-`ambil_dokumen`, `umum` — the text of each lives in `templates.py`.
+`ambil_dokumen`, `umum`, plus `custom` for a letter you write
+yourself - the text of each lives in `templates.py`.
 
 ## Config
 
-- `[document]` — `type`, `number`, `place`, `date`, `substitution_right`,
+- `[document]` - `type`, `number`, `place`, `date`, `substitution_right`,
   `valid_until`, `clause_label`, `footnote`. `purpose` / `powers` / `limits`
   override the template text when set.
-- `[document.stamp]` — `enabled`, `on` (`principal` | `agent` | `both`),
+- `[document.stamp]` - `enabled`, `on` (`principal` | `agent` | `both`),
   `width_cm`, `height_cm`, `image` (optional PNG/JPG to paste in).
-- `[esign]` — `anchors`, `anchor_principal`, `anchor_agent`, `fields_json`,
+- `[esign]` - `anchors`, `anchor_principal`, `anchor_agent`, `fields_json`,
   `signature_fields`. `--esign` switches the three toggles on at once.
-- `[principal]` and `[agent]` — identities. Optional fields (`birth`,
+- `[principal]` and `[agent]` - identities. Optional fields (`birth`,
   `occupation`, `position`, `phone`) are skipped when empty. `attach_id_copy`
   prints "(fotokopi KTP terlampir)"; `show_nik_on_signature` prints the NIK
   under the name in the signature block; `blank` / `blank_fields` drive the
   fill-in form.
-- `[output]` — defaults only: `dir` and `pattern`. `-o` and `-d` override them.
-- `[layout]` — `paper` (`A4` | `F4` | `LETTER` | `LEGAL`), margins, font,
+- `[output]` - defaults only: `dir` and `pattern`. `-o` and `-d` override them.
+- `[layout]` - `paper` (`A4` | `F4` | `LETTER` | `LEGAL`), margins, font,
   `font_size`, `signature_space_cm`.
 
 ### Single-page auto-fit
@@ -267,7 +275,7 @@ output/           generated PDFs (git-ignored)
 
 - The signature area is left blank on purpose; the materai and the wet
   signature go on the printed copy, or come from the e-sign platform.
-- Keep certificates out of the repo — `.gitignore` already excludes `*.p12`,
+- Keep certificates out of the repo - `.gitignore` already excludes `*.p12`,
   `*.pfx`, `*.pem`, `*.key` and `.env`.
-- Some offices insist on their own power-of-attorney form — check before
+- Some offices insist on their own power-of-attorney form - check before
   relying on this one.

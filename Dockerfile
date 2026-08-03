@@ -1,6 +1,6 @@
 # Generic container for hosts without a Streamlit preset (Fly.io, Render,
 # Cloud Run, a VPS). Streamlit Community Cloud and Hugging Face Spaces do not
-# need this file — they read requirements.txt directly.
+# need this file - they read requirements.txt directly.
 FROM python:3.12-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \

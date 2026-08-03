@@ -2,7 +2,7 @@
 
 Run locally:      streamlit run app.py
 Deploy for free:  Streamlit Community Cloud, or a Hugging Face Space
-                  (SDK: streamlit) — both need only requirements.txt.
+                  (SDK: streamlit) - both need only requirements.txt.
 
 Design notes
 ------------
@@ -10,7 +10,7 @@ Design notes
   view while the form is filled in.
 * No database, no files kept. Letters are rendered into a temporary directory,
   handed to the browser, and the directory is removed. Your details live on
-  your own device — a cookie in this browser, or a config.toml you keep.
+  your own device - a cookie in this browser, or a config.toml you keep.
 """
 
 from __future__ import annotations
@@ -58,6 +58,7 @@ PARTY_LABELS = {
 BLANK_EXTRA = ["birth", "occupation", "position", "phone"]
 SHARED_ADDRESS = ("address", "rt_rw", "village", "district", "city", "province")
 COOKIE = "sk_details_v1"
+COOKIE_TEMPLATE = "sk_template_v1"
 
 st.set_page_config(page_title="Surat Kuasa", page_icon="📄", layout="wide")
 
@@ -65,10 +66,10 @@ st.set_page_config(page_title="Surat Kuasa", page_icon="📄", layout="wide")
 # --------------------------------------------------------------------------- #
 # Look and feel
 #
-# The chrome is a dark desk so the rendered letter is the only paper on screen.
-# Inputs borrow the document's own vocabulary: a dotted fill-in line that turns
-# solid ballpoint blue when focused, and section rules built like the letter's
-# own "K H U S U S" divider.
+# A pale desk, and on it the rendered letter: the brightest surface on screen,
+# lifted by a hairline border and a soft shadow. Inputs borrow the document's
+# own vocabulary: a dotted fill-in line that turns solid ballpoint blue when
+# focused, and section rules built like the letter's own "K H U S U S" divider.
 # --------------------------------------------------------------------------- #
 
 CSS = """
@@ -76,12 +77,12 @@ CSS = """
 @import url('https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300;0,6..72,400;1,6..72,300&family=Public+Sans:wght@300;400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap');
 
 :root {
-  --ink: #0F1520;
-  --ink-raised: #171E2A;
-  --rule: rgba(231, 236, 245, 0.14);
-  --muted: #8A94A6;
-  --tinta: #3D6FE3;
-  --cap: #C4453C;
+  --desk: #F4F6F9;
+  --raised: #FFFFFF;
+  --rule: rgba(20, 26, 35, 0.18);
+  --muted: #5B6677;
+  --tinta: #2F5FD0;
+  --cap: #B03A31;
 }
 
 [data-testid="stToolbar"], [data-testid="stDecoration"], #MainMenu, footer {
@@ -144,14 +145,14 @@ div[data-baseweb="input"]:focus-within, div[data-baseweb="textarea"]:focus-withi
   border-radius: 3px; font-weight: 500; border: 1px solid var(--rule);
   transition: transform .12s ease, background .18s ease, border-color .18s ease;
 }
-.stButton button[kind="primary"] { background: var(--tinta); border-color: var(--tinta); }
+.stButton button[kind="primary"] { background: var(--tinta); border-color: var(--tinta); color: #fff; }
 .stButton button:hover, .stDownloadButton button:hover {
   transform: translateY(-1px); border-color: var(--tinta);
 }
 
 /* ---- expanders & chips ------------------------------------------------- */
 [data-testid="stExpander"] {
-  border: 1px solid var(--rule); border-radius: 4px; background: var(--ink-raised);
+  border: 1px solid var(--rule); border-radius: 4px; background: var(--raised);
 }
 [data-baseweb="tag"] {
   border-radius: 2px !important; font-family: 'IBM Plex Mono', monospace;
@@ -170,8 +171,8 @@ div[data-baseweb="input"]:focus-within, div[data-baseweb="textarea"]:focus-withi
    page is one click away in the fullscreen dialog. */
 .sk-sheet img {
   border-radius: 2px;
-  box-shadow: 0 24px 48px -18px rgba(0,0,0,.75), 0 2px 6px rgba(0,0,0,.4);
-  outline: 1px solid rgba(255,255,255,.06);
+  box-shadow: 0 18px 36px -16px rgba(20,26,35,.28), 0 1px 3px rgba(20,26,35,.14);
+  outline: 1px solid rgba(20,26,35,.12);
   max-height: calc(100vh - 24rem);
   width: auto !important;
   margin: 0 auto;
@@ -183,8 +184,8 @@ div[data-baseweb="input"]:focus-within, div[data-baseweb="textarea"]:focus-withi
   letter-spacing: 0.04em; color: var(--muted); margin: 0.35rem 0 0;
 }
 .sk-note b { color: var(--cap); font-weight: 500; }
-.sk-step { font-size: 0.86rem; color: #C9D2E0; margin: 0 0 .45rem; }
-.sk-step b { color: #E7ECF5; font-weight: 600; }
+.sk-step { font-size: 0.86rem; color: #2C3543; margin: 0 0 .45rem; }
+.sk-step b { color: #141A23; font-weight: 600; }
 
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; animation: none !important; }
@@ -204,26 +205,59 @@ def rule(label: str) -> None:
 # Storage: the browser, or a file you keep. Never the server.
 # --------------------------------------------------------------------------- #
 
-def _identity_only(cfg: dict) -> dict:
-    """The parts worth keeping between visits: who you are, where you sign."""
+# Per-letter values are deliberately left out: a letter number and a fixed date
+# belong to one document, not to your setup.
+REMEMBERED_DOCUMENT = ("type", "place", "substitution_right", "valid_until",
+                       "footnote")
+REMEMBERED_LAYOUT = ("paper", "font_size", "fit_one_page")
+COOKIE_LIMIT = 3500  # browsers cap a cookie at about 4 KB, headers and all
+
+
+def _device_settings(cfg: dict) -> dict:
+    """Everything worth carrying to the next visit.
+
+    Both parties, where you sign, how the materai is placed, the e-sign
+    switches (anchors, .fields.json, AcroForm fields) and the page setup. The
+    clause text is skipped: it belongs to one letter type and would crowd out
+    the cookie.
+    """
+    document = cfg.get("document", {})
     return {
         "principal": cfg.get("principal", {}),
         "agent": cfg.get("agent", {}),
-        "document": {"type": cfg.get("document", {}).get("type", "umum"),
-                     "place": cfg.get("document", {}).get("place", "")},
+        "document": {
+            **{k: document.get(k) for k in REMEMBERED_DOCUMENT if document.get(k) not in (None, "")},
+            "stamp": document.get("stamp", {}),
+        },
+        "esign": cfg.get("esign", {}),
+        "layout": {k: cfg.get("layout", {}).get(k)
+                   for k in REMEMBERED_LAYOUT if cfg.get("layout", {}).get(k) is not None},
     }
 
 
+def _pack(settings: dict) -> str:
+    return base64.b64encode(
+        zlib.compress(dump_toml(settings).encode("utf-8"), 9)
+    ).decode("ascii")
+
+
 def remember_on_device(cfg: dict) -> None:
-    """Keep the details in a cookie on this device (compressed, ~1 year).
+    """Keep your setup in a cookie on this device (compressed, ~1 year).
 
     Streamlit already carries whatever you type to its own process, so this
-    adds no new exposure — and it means the form fills itself next time. The
+    adds no new exposure - and it means the form fills itself next time. The
     cookie lives on the device; nothing is written to a database or a disk.
     """
-    payload = base64.b64encode(
-        zlib.compress(dump_toml(_identity_only(cfg)).encode("utf-8"), 9)
-    ).decode("ascii")
+    settings = _device_settings(cfg)
+    payload = _pack(settings)
+    if len(payload) > COOKIE_LIMIT:
+        # Too much to carry: keep who you are, drop the rest.
+        settings = {k: settings[k] for k in ("principal", "agent")}
+        payload = _pack(settings)
+        st.warning("Setelannya terlalu panjang untuk disimpan di perangkat - "
+                   "hanya data pemberi & penerima kuasa yang diingat. Unduh "
+                   "config.toml untuk menyimpan semuanya.")
+
     secure = "; Secure" if str(getattr(st.context, "url", "")).startswith("https") else ""
     components.html(
         f"""<script>
@@ -232,10 +266,42 @@ def remember_on_device(cfg: dict) -> None:
         </script>""", height=0)
 
 
+def remember_template(label: str, purpose: str, powers: list[str],
+                      limits: str) -> bool:
+    """Keep a letter the user wrote themselves, on their own device."""
+    payload = _pack({"label": label or "Template saya", "purpose": purpose,
+                     "powers": powers, "limits": limits})
+    if len(payload) > COOKIE_LIMIT:
+        st.warning("Teks suratnya terlalu panjang untuk disimpan di perangkat. "
+                   "Persingkat, atau simpan lewat config.toml.")
+        return False
+    secure = "; Secure" if str(getattr(st.context, "url", "")).startswith("https") else ""
+    components.html(
+        f"""<script>
+        document.cookie = "{COOKIE_TEMPLATE}=" + {json.dumps(payload)} +
+          "; max-age=31536000; path=/; SameSite=Lax{secure}";
+        </script>""", height=0)
+    return True
+
+
+def recall_template() -> dict | None:
+    try:
+        raw = st.context.cookies.get(COOKIE_TEMPLATE)
+    except Exception:
+        return None
+    if not raw:
+        return None
+    try:
+        return tomllib.loads(zlib.decompress(base64.b64decode(raw)).decode("utf-8"))
+    except Exception:
+        return None
+
+
 def forget_on_device() -> None:
     components.html(
         f"""<script>
         document.cookie = "{COOKIE}=; max-age=0; path=/; SameSite=Lax";
+        document.cookie = "{COOKIE_TEMPLATE}=; max-age=0; path=/; SameSite=Lax";
         </script>""", height=0)
 
 
@@ -253,6 +319,17 @@ def recall_from_device() -> dict | None:
         return tomllib.loads(text)
     except Exception:
         return None
+
+
+def deep_merge(base: dict, overlay: dict) -> dict:
+    """Overlay wins, but nested tables merge instead of replacing wholesale."""
+    merged = dict(base)
+    for key, value in overlay.items():
+        if isinstance(value, dict) and isinstance(merged.get(key), dict):
+            merged[key] = deep_merge(merged[key], value)
+        else:
+            merged[key] = value
+    return merged
 
 
 def apply_base(cfg: dict, note: str) -> None:
@@ -290,7 +367,7 @@ def party_form(role: str, title: str, data: dict, rev: int,
     rule(title)
     k = lambda field: f"{role}_{field}_{rev}"  # noqa: E731
 
-    blank = st.checkbox("Kosongkan — diisi tangan nanti",
+    blank = st.checkbox("Kosongkan - diisi tangan nanti",
                         value=bool(data.get("blank")), key=k("blank"),
                         help="Data jadi garis titik-titik, termasuk nama di "
                              "atas tanda tangan.")
@@ -324,13 +401,13 @@ def party_form(role: str, title: str, data: dict, rev: int,
     if same_address:
         st.markdown(
             f'<p class="sk-note">Alamat mengikuti pemberi kuasa: '
-            f'{copy_from.get("address", "—")}, {copy_from.get("city", "—")}</p>',
+            f'{copy_from.get("address", "-")}, {copy_from.get("city", "-")}</p>',
             unsafe_allow_html=True)
 
     out["nik"] = clean_nik(out.get("nik", ""))
     digits = re.sub(r"\D", "", out["nik"])
     if out["nik"] and len(digits) != 16:
-        st.markdown(f'<p class="sk-note"><b>NIK {len(digits)} digit</b> — '
+        st.markdown(f'<p class="sk-note"><b>NIK {len(digits)} digit</b> - '
                     'NIK Indonesia 16 digit.</p>', unsafe_allow_html=True)
 
     out["same_address"] = same_address
@@ -413,7 +490,7 @@ st.markdown(
     '<div class="sk-eyebrow">Surat kuasa · perorangan</div>'
     '<h1 class="sk-title">Pilih suratnya, isi datanya, <em>unduh</em>.</h1>'
     '<p class="sk-sub">Lima belas keperluan administrasi, format resmi, satu '
-    'halaman. Data disimpan di perangkatmu sendiri — server ini tidak menyimpan '
+    'halaman. Data disimpan di perangkatmu sendiri - server ini tidak menyimpan '
     'apa pun.</p>',
     unsafe_allow_html=True,
 )
@@ -424,20 +501,23 @@ if "base" not in st.session_state:  # shipped example until the browser answers
     apply_base(dict(next(iter(presets.values()), {})), "contoh bawaan")
 
 remembered = recall_from_device()
+my_template = recall_template()
 if remembered and not st.session_state.get("restored"):
     st.session_state["restored"] = True
-    merged = dict(st.session_state["base"])
-    merged.update(remembered)
-    merged.setdefault("document", {}).update(remembered.get("document", {}))
-    apply_base(merged, "tersimpan di perangkat ini")
+    apply_base(deep_merge(st.session_state["base"], remembered),
+               "tersimpan di perangkat ini")
 
 with st.sidebar:
     st.markdown('<div class="sk-eyebrow">Data kamu</div>', unsafe_allow_html=True)
     st.markdown(f'<p class="sk-note">Sumber: {st.session_state["base_note"]}</p>',
                 unsafe_allow_html=True)
     if remembered:
-        st.markdown('<p class="sk-note">Diingat di perangkat ini — form terisi '
-                    'sendiri saat kamu kembali.</p>', unsafe_allow_html=True)
+        kept = ", ".join(k for k in ("principal", "agent", "document",
+                                     "esign", "layout") if k in remembered)
+        st.markdown('<p class="sk-note">Diingat di perangkat ini - data diri, '
+                    'materai, e-sign dan tata letak terisi sendiri saat kamu '
+                    f'kembali.<br>Bagian tersimpan: {kept}.</p>',
+                    unsafe_allow_html=True)
         if st.button("Lupakan data di perangkat ini", use_container_width=True):
             forget_on_device()
             st.session_state.pop("restored", None)
@@ -456,8 +536,8 @@ with st.sidebar:
             st.error("File itu bukan config.toml yang valid.")
 
     if presets:
-        pick = st.selectbox("Contoh bawaan", ["—"] + list(presets))
-        if pick != "—" and st.button("Pakai contoh ini", use_container_width=True):
+        pick = st.selectbox("Contoh bawaan", ["-"] + list(presets))
+        if pick != "-" and st.button("Pakai contoh ini", use_container_width=True):
             apply_base(dict(presets[pick]), f"contoh {pick}")
             st.rerun()
 
@@ -526,23 +606,53 @@ with form_col:
                                  placeholder="Lampiran: fotokopi KTP …",
                                  key=f"foot_{rev}")
         if len(types) == 1:
-            tpl = TEMPLATES[types[0]]
+            tpl = dict(TEMPLATES[types[0]])
+            # A letter you wrote yourself starts from your saved version.
+            if types[0] == "custom" and my_template:
+                tpl.update({k: my_template[k] for k in ("purpose", "powers",
+                                                        "limits")
+                            if my_template.get(k)})
             purpose = st.text_area("Maksud kuasa",
                                    value=str(document.get("purpose")
                                              or tpl["purpose"]), height=90,
                                    key=f"purpose_{rev}_{types[0]}")
             powers_text = st.text_area(
-                "Rincian wewenang — satu per baris",
+                "Rincian wewenang - satu per baris",
                 value="\n".join(document.get("powers") or tpl.get("powers", [])),
                 height=160, key=f"powers_{rev}_{types[0]}")
             limits = st.text_area(
                 "Pembatasan",
                 value=str(document.get("limits") or tpl.get("limits", "")),
                 height=90, key=f"limits_{rev}_{types[0]}")
+
+            t1, t2 = st.columns([3, 2])
+            with t1:
+                tpl_label = st.text_input(
+                    "Nama template", value=str((my_template or {}).get("label")
+                                               or "Template saya"),
+                    key=f"tpl_label_{rev}")
+            with t2:
+                st.markdown("<div style='height:1.55rem'></div>",
+                            unsafe_allow_html=True)
+                if st.button("Simpan teks ini di perangkat",
+                             use_container_width=True):
+                    saved = remember_template(
+                        tpl_label, purpose,
+                        [p.strip() for p in powers_text.splitlines() if p.strip()],
+                        limits)
+                    if saved:
+                        st.success(f"Tersimpan. Pilih jenis \"Custom\" untuk "
+                                   f"memakai \"{tpl_label}\" lain kali.")
+            if my_template:
+                st.markdown(
+                    f'<p class="sk-note">Template tersimpan: '
+                    f'{my_template.get("label", "Template saya")} - muncul saat '
+                    'jenis "Custom" dipilih.</p>', unsafe_allow_html=True)
         else:
             purpose = powers_text = limits = None
-            st.info("Beberapa jenis dipilih — tiap surat memakai teks "
-                    "templatenya masing-masing.")
+            st.info("Beberapa jenis dipilih, jadi tiap surat memakai teks "
+                    "templatenya masing-masing. Pilih satu jenis saja kalau "
+                    "mau menulis isinya sendiri.")
 
     with st.expander("Materai, e-sign & tata letak"):
         stamp_enabled = st.checkbox("Sisakan ruang materai",
@@ -704,7 +814,7 @@ with preview_col:
     if files and len(files) > 1:
         with st.expander(f"{len(files)} berkas dalam paket"):
             for name, data in files:
-                st.markdown(f'<p class="sk-note">{name} — '
+                st.markdown(f'<p class="sk-note">{name} - '
                             f'{len(data) / 1024:.1f} KB</p>',
                             unsafe_allow_html=True)
 
@@ -719,16 +829,16 @@ with sign_col:
     st.markdown('<div class="sk-eyebrow">Tanda tangan elektronik</div>',
                 unsafe_allow_html=True)
     st.markdown(
-        '<p class="sk-step"><b>Privy</b> — masuk ke akun Privy, unggah PDF-nya, '
+        '<p class="sk-step"><b>Privy</b> - masuk ke akun Privy, unggah PDF-nya, '
         'lalu seret kotak tanda tangan ke ruang kosong di atas nama. '
         'Undang penerima kuasa lewat email/nomor HP-nya untuk ikut tanda '
         'tangan.</p>'
-        '<p class="sk-step"><b>DocuSign / Adobe Acrobat Sign</b> — aktifkan '
+        '<p class="sk-step"><b>DocuSign / Adobe Acrobat Sign</b> - aktifkan '
         '“Anchor tak terlihat” di atas sebelum membuat surat. Pada DocuSign '
         'pakai <i>anchor string</i> <code>/ttd_pemberi/</code> dan '
         '<code>/ttd_penerima/</code>; field tanda tangan menempel sendiri di '
         'posisi yang benar tanpa menyeret apa pun.</p>'
-        '<p class="sk-step"><b>Lewat API</b> — aktifkan “Koordinat tanda '
+        '<p class="sk-step"><b>Lewat API</b> - aktifkan “Koordinat tanda '
         'tangan”. Berkas <code>.fields.json</code> memuat halaman dan '
         'kotak tiap area dalam dua sistem koordinat, siap dipakai untuk '
         'DocuSign tabs atau endpoint sejenis.</p>',
@@ -739,19 +849,19 @@ with stamp_col:
     st.markdown(
         '<p class="sk-step">Ruang materai di surat ini sengaja dibiarkan '
         '<b>kosong tanpa garis</b>, jadi e-meterai bisa ditempel persis di '
-        'situ tanpa menimpa apa pun — atau materai tempel dibubuhkan setelah '
+        'situ tanpa menimpa apa pun - atau materai tempel dibubuhkan setelah '
         'dicetak.</p>'
-        '<p class="sk-step"><b>Harga</b> — nominal meterai elektronik '
+        '<p class="sk-step"><b>Harga</b> - nominal meterai elektronik '
         'Rp10.000 dan itu ditetapkan pemerintah; yang berbeda antar penjual '
         'hanya biaya layanannya (sebagian distributor menambah sekitar '
         'Rp2.500 per keping). Menawar di bawah Rp10.000 bukan penghematan: '
         'DJP menyebut meterai di bawah nominal patut dicurigai palsu.</p>'
-        '<p class="sk-step"><b>Cara termurah</b> — beli langsung di distributor '
+        '<p class="sk-step"><b>Cara termurah</b> - beli langsung di distributor '
         'resmi Peruri (daftarnya ada di situs Peruri) dan bandingkan biaya '
         'layanannya, lalu bubuhkan sendiri lewat portal distributor tersebut. '
         'Paket banyak keping biasanya menurunkan biaya layanan per '
         'dokumen.</p>'
-        '<p class="sk-step"><b>Kapan boleh dilewati</b> — meterai hanya wajib '
+        '<p class="sk-step"><b>Kapan boleh dilewati</b> - meterai hanya wajib '
         'untuk dokumen yang dipakai sebagai alat bukti perdata. Banyak loket '
         'administrasi menerima surat kuasa tanpa meterai; tanyakan dulu ke '
         'instansi tujuan sebelum membeli.</p>',
@@ -764,7 +874,7 @@ with stamp_col:
 st.markdown(
     '<p class="sk-note" style="margin-top:2.5rem">Surat ini template, bukan '
     'nasihat hukum. Sebagian instansi mewajibkan formulir kuasa versi mereka '
-    'sendiri — cek dulu ke loket tujuan. Dokumen dibuat sementara di memori '
+    'sendiri - cek dulu ke loket tujuan. Dokumen dibuat sementara di memori '
     'server lalu dihapus; tidak ada basis data.</p>',
     unsafe_allow_html=True,
 )

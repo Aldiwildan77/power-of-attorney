@@ -1,11 +1,11 @@
-# Theme for app.py. The chrome is a dark "desk"; the only paper on screen is
-# the rendered letter itself.
+# Theme for app.py. A pale desk; the rendered letter is the brightest thing on
+# it, held by a hairline border and a soft shadow.
 [theme]
-base = "dark"
-primaryColor = "#3D6FE3"
-backgroundColor = "#0F1520"
-secondaryBackgroundColor = "#171E2A"
-textColor = "#E7ECF5"
+base = "light"
+primaryColor = "#2F5FD0"
+backgroundColor = "#F4F6F9"
+secondaryBackgroundColor = "#FFFFFF"
+textColor = "#141A23"
 
 [client]
 # No developer menu in production; errors go to the server log, not the page.
