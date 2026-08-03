@@ -106,7 +106,8 @@ html, body, [data-testid="stAppViewContainer"],
   font-family: 'Newsreader', 'Times New Roman', Georgia, serif;
 }
 [data-testid="stAppViewContainer"] .block-container {
-  padding-top: 2rem; padding-bottom: 4rem; max-width: 1440px;
+  padding-top: 2rem; padding-bottom: 4rem;
+  max-width: min(1800px, 96vw);
 }
 
 /* ---- masthead ---------------------------------------------------------- */
@@ -1057,9 +1058,48 @@ with form_col:
             help="Butuh pyhanko terpasang di server." if not esign.have_pyhanko()
                  else "Kotak klik-untuk-tanda-tangan di Acrobat.")
 
-    rule("Buat surat")
-    # Filled in after the config is assembled, a few lines below.
-    action_slot = st.container()
+    rule("Tanda tangan & materai")
+    st.markdown('<div class="sk-eyebrow">Tanda tangan elektronik</div>',
+                unsafe_allow_html=True)
+    line("<b>Privy</b> - unggah PDF, taruh kotak tanda tangan.",
+         "Masuk ke akun Privy, unggah PDF-nya, seret kotak tanda tangan ke "
+         "ruang kosong di atas nama, lalu undang penerima kuasa lewat email "
+         "atau nomor HP-nya untuk ikut menandatangani.")
+    line("<b>DocuSign / Adobe Sign</b> - anchor otomatis.",
+         "Aktifkan Anchor tak terlihat sebelum membuat surat. Pakai anchor "
+         "string /ttd_pemberi/ dan /ttd_penerima/; field tanda tangan menempel "
+         "sendiri di posisi yang benar tanpa menyeret apa pun.")
+    line("<b>Lewat API</b> - koordinat siap pakai.",
+         "Aktifkan Koordinat tanda tangan. Berkas .fields.json memuat halaman "
+         "dan kotak tiap area dalam dua sistem koordinat, siap dipakai untuk "
+         "DocuSign tabs atau endpoint sejenis.")
+
+    st.markdown('<div class="sk-eyebrow" style="margin-top:1rem">e-Meterai</div>',
+                unsafe_allow_html=True)
+    line("Ruang materai dibiarkan kosong tanpa garis.",
+         "Karena kosong, e-meterai bisa ditempel persis di situ tanpa menimpa "
+         "apa pun; kalau dicetak, materai tempel dibubuhkan di tempat yang sama.")
+    line("Harga nominal Rp10.000, beda hanya biaya layanan.",
+         "Nominal meterai elektronik ditetapkan pemerintah. Sebagian "
+         "distributor menambah sekitar Rp2.500 per keping. Menawar di bawah "
+         "Rp10.000 bukan penghematan: DJP menyebut meterai di bawah nominal "
+         "patut dicurigai palsu.")
+    line("Termurah: beli di distributor resmi Peruri.",
+         "Bandingkan biaya layanan antar distributor resmi, ambil paket banyak "
+         "keping kalau sering dipakai, lalu bubuhkan sendiri lewat portal "
+         "distributor tersebut.")
+    line("Kadang tidak wajib.",
+         "Meterai hanya wajib untuk dokumen yang dipakai sebagai alat bukti "
+         "perdata. Banyak loket administrasi menerima surat kuasa tanpa "
+         "meterai; tanyakan dulu ke instansi tujuan sebelum membeli.")
+
+    st.markdown(
+        '<p class="sk-note" style="margin-top:1.6rem">Template, bukan nasihat '
+        'hukum.<span class="sk-info" tabindex="0" data-tip="Sebagian instansi '
+        'mewajibkan formulir kuasa versi mereka sendiri, jadi cek dulu ke loket '
+        'tujuan. Dokumen dibuat sementara di memori server lalu dihapus.">i'
+        '</span></p>', unsafe_allow_html=True)
+
 
 # --------------------------------------------------------------------------- #
 # Assemble the config from the form
@@ -1104,6 +1144,45 @@ ready = bool(types) and not missing
 cfg_toml = dump_toml(cfg)
 
 
+@st.dialog("Bagikan setelan", width="large")
+def show_share(types: list[str], cfg: dict, rev: int) -> None:
+    line("Tautan setelan, tanpa data pribadi.",
+         "Yang dibawa: jenis surat, tempat, materai, teks kuasa, kop, footer, "
+         "e-sign dan tata letak. Nama, NIK dan alamat tidak ikut, karena "
+         "tautan mengendap di riwayat chat dan browser.")
+    share_url = build_share_link(types, cfg)
+    png = qr_png(share_url)
+
+    if png:
+        q1, q2 = st.columns([1, 1])
+        with q1:
+            st.image(png, width=220)
+        with q2:
+            line("Pindai atau simpan QR ini.",
+                 "Memindainya membuka app dengan setelan yang sama, tanpa data "
+                 "pribadi.")
+            st.download_button("Unduh QR (PNG)", png,
+                               file_name="surat-kuasa-setelan.png",
+                               mime="image/png", use_container_width=True,
+                               key=f"qr_dl_{rev}")
+    else:
+        line(f"Setelan ini terlalu panjang untuk satu QR "
+             f"({len(share_url)} karakter).",
+             "Satu QR menampung sekitar 2.900 byte menurut standarnya, bukan "
+             "batasan app ini. Tautannya tetap bisa disalin, atau kirim berkas "
+             "config.toml.")
+
+    if st.checkbox("Lihat tautannya", key=f"show_link_{rev}"):
+        st.code(share_url, language=None)
+        line(f"Panjang {len(share_url)} karakter.",
+             "Setelan dipadatkan dulu sebelum masuk tautan, jadi teks kuasa, "
+             "kop dan footer pun ikut tanpa membuat tautannya meledak.")
+
+    line("Surat jadi: kirim PDF. Data lengkap: kirim config.toml.",
+         "Berkas lebih aman daripada tautan untuk data pribadi, karena tidak "
+         "tertinggal di riwayat chat atau browser.")
+
+
 @st.dialog("Pratinjau", width="large")
 def show_fullscreen(toml_text: str, doc_type: str) -> None:
     png = preview_image(toml_text, doc_type, scale=4)
@@ -1119,29 +1198,71 @@ def show_fullscreen(toml_text: str, doc_type: str) -> None:
 # reachable no matter how far the form is scrolled.
 # --------------------------------------------------------------------------- #
 
-with action_slot:
+with preview_col:
+    head, share_btn = st.columns([3, 2])
+    with head:
+        st.markdown('<div class="sk-eyebrow" style="padding-top:.45rem">'
+                    'Pratinjau langsung</div>', unsafe_allow_html=True)
+    with share_btn:
+        if st.button("Bagikan setelan", use_container_width=True,
+                     disabled=not types):
+            show_share(types, cfg, rev)
+
+    def draw_preview(doc_type: str) -> None:
+        png = preview_image(cfg_toml, doc_type)
+        if not png:
+            st.markdown('<p class="sk-note">Pratinjau butuh pypdfium2 '
+                        '(<code>pip install pypdfium2</code>).</p>',
+                        unsafe_allow_html=True)
+            return
+        st.markdown('<div class="sk-sheet">', unsafe_allow_html=True)
+        st.image(png, use_container_width=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+        st.markdown(f'<p class="sk-note">{TEMPLATES[doc_type]["label"]} - '
+                    'halaman 1</p>', unsafe_allow_html=True)
+        if st.button("Layar penuh", use_container_width=True,
+                     key=f"full_{rev}_{doc_type}"):
+            show_fullscreen(cfg_toml, doc_type)
+
+    if not ready:
+        st.markdown('<p class="sk-note">Pratinjau muncul setelah nama '
+                    'terisi.</p>', unsafe_allow_html=True)
+    elif len(types) == 1:
+        draw_preview(types[0])
+    elif len(types) <= 5:
+        # A tab per letter: every one is visible without hunting for it.
+        for tab, doc_type in zip(st.tabs(types), types):
+            with tab:
+                draw_preview(doc_type)
+    else:
+        # Past a handful, rendering them all on every keystroke is wasteful.
+        shown = st.selectbox("Lihat pratinjau", types, key=f"pv_{rev}",
+                             format_func=lambda t: TEMPLATES[t]["label"],
+                             label_visibility="collapsed")
+        draw_preview(shown)
+        st.markdown(f'<p class="sk-note">{len(types)} jenis dipilih; semuanya '
+                    'ikut dibuat saat kamu menekan Buat surat.</p>',
+                    unsafe_allow_html=True)
+
+    rule("Buat surat")
     if missing:
         st.warning(f"Isi nama {' dan '.join(missing)}, atau centang "
                    "\"Kosongkan\" untuk mencetak blanko.")
     elif not types:
         st.warning("Pilih dulu jenis suratnya.")
 
-    a1, a2 = st.columns([2, 3])
-    with a1:
-        go = st.button("Buat surat", type="primary", use_container_width=True,
-                       disabled=not ready)
-    with a2:
-        st.checkbox("Ingat data ini di perangkat ini", value=True,
-                    key=f"remember_{rev}",
-                    help="Disimpan sebagai cookie di browser ini, bukan di "
-                         "server. Bisa dihapus lewat sidebar.")
-
-    if go:
+    if st.button("Buat surat", type="primary", use_container_width=True,
+                 disabled=not ready):
         with st.spinner("Membuat dokumen..."):
             st.session_state["files"] = build_documents(
                 dict(cfg), types, want_json, want_fields)
         if st.session_state.get(f"remember_{rev}", True):
             remember_on_device(cfg)  # so the form fills itself next time
+
+    st.checkbox("Ingat data ini di perangkat ini", value=True,
+                key=f"remember_{rev}",
+                help="Disimpan sebagai cookie di browser ini, bukan di server. "
+                     "Bisa dihapus lewat sidebar.")
 
     files = st.session_state.get("files")
     if files:
@@ -1169,121 +1290,3 @@ with action_slot:
                     st.markdown(f'<p class="sk-note">{name} - '
                                 f'{len(data) / 1024:.1f} KB</p>',
                                 unsafe_allow_html=True)
-
-
-with preview_col:
-    st.markdown('<div class="sk-eyebrow">Pratinjau langsung</div>',
-                unsafe_allow_html=True)
-
-    if ready:
-        png = preview_image(cfg_toml, types[0])
-        if png:
-            st.markdown('<div class="sk-sheet">', unsafe_allow_html=True)
-            st.image(png, use_container_width=True)
-            st.markdown('</div>', unsafe_allow_html=True)
-            note = f"{TEMPLATES[types[0]]['label']} - halaman 1"
-            if len(types) > 1:
-                note += f" - {len(types) - 1} jenis lain ikut dibuat"
-            st.markdown(f'<p class="sk-note">{note}</p>', unsafe_allow_html=True)
-            if st.button("Layar penuh", use_container_width=True):
-                show_fullscreen(cfg_toml, types[0])
-        else:
-            st.markdown('<p class="sk-note">Pratinjau butuh pypdfium2 '
-                        '(<code>pip install pypdfium2</code>).</p>',
-                        unsafe_allow_html=True)
-    else:
-        st.markdown('<p class="sk-note">Pratinjau muncul setelah nama '
-                    'terisi.</p>', unsafe_allow_html=True)
-
-    with st.expander("Bagikan setelan ini"):
-        line("Tautan setelan, tanpa data pribadi.",
-             "Yang dibawa: jenis surat, tempat, materai, teks kuasa, kop, "
-             "footer, e-sign dan tata letak. Nama, NIK dan alamat tidak ikut, "
-             "karena tautan mengendap di riwayat chat dan browser.")
-        share_url = build_share_link(types, cfg)
-        png = qr_png(share_url)
-
-        if png:
-            q1, q2 = st.columns([1, 1])
-            with q1:
-                st.image(png, width=200)
-            with q2:
-                line("Pindai atau simpan QR ini.",
-                     "Memindainya membuka app dengan setelan yang sama, tanpa "
-                     "data pribadi.")
-                st.download_button("Unduh QR (PNG)", png,
-                                   file_name="surat-kuasa-setelan.png",
-                                   mime="image/png", use_container_width=True)
-        else:
-            line(f"Setelan ini terlalu panjang untuk satu QR "
-                 f"({len(share_url)} karakter).",
-                 "Satu QR menampung sekitar 2.900 byte menurut standarnya, "
-                 "bukan batasan app ini. Tautannya tetap bisa disalin, atau "
-                 "kirim berkas config.toml.")
-
-        if st.checkbox("Lihat tautannya", key=f"show_link_{rev}"):
-            st.code(share_url, language=None)
-            line(f"Panjang {len(share_url)} karakter.",
-                 "Setelan dipadatkan dulu sebelum masuk tautan, jadi teks "
-                 "kuasa, kop dan footer pun ikut tanpa membuat tautannya "
-                 "meledak.")
-
-        line("Surat jadi: kirim PDF. Data lengkap: kirim config.toml.",
-             "Berkas lebih aman daripada tautan untuk data pribadi, karena "
-             "tidak tertinggal di riwayat chat atau browser.")
-
-
-# --------------------------------------------------------------------------- #
-# Signing and stamping: what to do with the PDF once it exists
-# --------------------------------------------------------------------------- #
-
-rule("Tanda tangan & materai")
-sign_col, stamp_col = st.columns(2, gap="large")
-
-with sign_col:
-    st.markdown('<div class="sk-eyebrow">Tanda tangan elektronik</div>',
-                unsafe_allow_html=True)
-    line("<b>Privy</b> - unggah PDF, taruh kotak tanda tangan.",
-         "Masuk ke akun Privy, unggah PDF-nya, seret kotak tanda tangan ke "
-         "ruang kosong di atas nama, lalu undang penerima kuasa lewat email "
-         "atau nomor HP-nya untuk ikut menandatangani.")
-    line("<b>DocuSign / Adobe Sign</b> - anchor otomatis.",
-         "Aktifkan Anchor tak terlihat sebelum membuat surat. Pakai anchor "
-         "string /ttd_pemberi/ dan /ttd_penerima/; field tanda tangan menempel "
-         "sendiri di posisi yang benar tanpa menyeret apa pun.")
-    line("<b>Lewat API</b> - koordinat siap pakai.",
-         "Aktifkan Koordinat tanda tangan. Berkas .fields.json memuat halaman "
-         "dan kotak tiap area dalam dua sistem koordinat, siap dipakai untuk "
-         "DocuSign tabs atau endpoint sejenis.")
-
-with stamp_col:
-    st.markdown('<div class="sk-eyebrow">e-Meterai</div>', unsafe_allow_html=True)
-    line("Ruang materai dibiarkan kosong tanpa garis.",
-         "Karena kosong, e-meterai bisa ditempel persis di situ tanpa menimpa "
-         "apa pun; kalau dicetak, materai tempel dibubuhkan di tempat yang sama.")
-    line("Harga nominal Rp10.000, beda hanya biaya layanan.",
-         "Nominal meterai elektronik ditetapkan pemerintah. Sebagian "
-         "distributor menambah sekitar Rp2.500 per keping. Menawar di bawah "
-         "Rp10.000 bukan penghematan: DJP menyebut meterai di bawah nominal "
-         "patut dicurigai palsu.")
-    line("Termurah: beli di distributor resmi Peruri.",
-         "Bandingkan biaya layanan antar distributor resmi, ambil paket banyak "
-         "keping kalau sering dipakai, lalu bubuhkan sendiri lewat portal "
-         "distributor tersebut.")
-    line("Kadang tidak wajib.",
-         "Meterai hanya wajib untuk dokumen yang dipakai sebagai alat bukti "
-         "perdata. Banyak loket administrasi menerima surat kuasa tanpa "
-         "meterai; tanyakan dulu ke instansi tujuan sebelum membeli.")
-
-
-# --------------------------------------------------------------------------- #
-# Footer
-# --------------------------------------------------------------------------- #
-
-st.markdown(
-    '<p class="sk-note" style="margin-top:2.5rem">Template, bukan nasihat hukum.'
-    '<span class="sk-info" tabindex="0" data-tip="Sebagian instansi mewajibkan '
-    'formulir kuasa versi mereka sendiri, jadi cek dulu ke loket tujuan. '
-    'Dokumen dibuat sementara di memori server lalu dihapus.">i</span></p>',
-    unsafe_allow_html=True,
-)
