@@ -57,6 +57,7 @@ PARTY_LABELS = {
     "phone": "No. Telepon",
 }
 BLANK_EXTRA = ["birth", "occupation", "position", "phone"]
+ZOOM_STEPS = {"Muat": 1, "1,5x": 1.5, "2x": 2, "3x": 3}
 # Faces built into every PDF reader: label and the matching bold.
 LETTER_FONTS = {
     "Times-Roman": ("Times New Roman (lazim di surat dinas)", "Times-Bold"),
@@ -66,8 +67,10 @@ LETTER_FONTS = {
 SHARED_ADDRESS = ("address", "rt_rw", "village", "district", "city", "province")
 COOKIE = "sk_details_v1"
 COOKIE_TEMPLATE = "sk_template_v1"
+COOKIE_PROFILES = "sk_profiles_v1"
 
-st.set_page_config(page_title="Surat Kuasa", page_icon="📄", layout="wide")
+st.set_page_config(page_title="Surat Kuasa", page_icon="📄", layout="wide",
+                   initial_sidebar_state="collapsed")
 
 
 # --------------------------------------------------------------------------- #
@@ -185,6 +188,9 @@ div[data-baseweb="input"]:focus-within, div[data-baseweb="textarea"]:focus-withi
   display: block;
 }
 [data-testid="stDialog"] .sk-sheet img { max-height: none; width: 100% !important; }
+[data-testid="stVerticalBlockBorderWrapper"] .sk-sheet img {
+  max-height: none; width: auto !important;
+}
 .sk-note {
   font-size: 0.8rem; color: var(--muted); margin: 0.3rem 0 0;
 }
@@ -203,12 +209,32 @@ div[data-baseweb="input"]:focus-within, div[data-baseweb="textarea"]:focus-withi
 }
 .sk-line b { font-weight: 500; }
 .sk-info {
-  display: inline-flex; align-items: center; justify-content: center;
-  width: 1.05em; height: 1.05em; border-radius: 50%;
+  position: relative; display: inline-flex; align-items: center;
+  justify-content: center; width: 1.15em; height: 1.15em; border-radius: 50%;
   border: 1px solid var(--rule); color: var(--muted);
   font-size: .72rem; font-style: italic; cursor: help; flex: none;
+  outline: none;
 }
-.sk-info:hover { border-color: var(--tinta); color: var(--tinta); }
+.sk-info:hover, .sk-info:focus { border-color: var(--tinta); color: var(--tinta); }
+
+/* The panel itself: instant, readable, and reachable by tap or keyboard. */
+.sk-info::after {
+  content: attr(data-tip);
+  position: absolute; bottom: calc(100% + 8px); left: 50%;
+  transform: translateX(-50%) translateY(4px);
+  width: max-content; max-width: 280px;
+  padding: .55rem .7rem; border-radius: 4px;
+  background: #141A23; color: #F2F5F9;
+  font-size: .78rem; font-style: normal; line-height: 1.45; text-align: left;
+  box-shadow: 0 10px 24px -10px rgba(20,26,35,.5);
+  opacity: 0; visibility: hidden; pointer-events: none; z-index: 999;
+  transition: opacity .12s ease, transform .12s ease;
+}
+.sk-info:hover::after, .sk-info:focus::after {
+  opacity: 1; visibility: visible; transform: translateX(-50%) translateY(0);
+}
+/* Streamlit clips its blocks, so let the panel out. */
+.sk-line, [data-testid="stMarkdownContainer"] { overflow: visible !important; }
 
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; animation: none !important; }
@@ -220,7 +246,9 @@ div[data-baseweb="input"]:focus-within, div[data-baseweb="textarea"]:focus-withi
 
 def line(text: str, tip: str = "") -> None:
     """One short line; anything longer belongs behind the (i)."""
-    mark = (f'<span class="sk-info" title="{tip}">i</span>') if tip else ""
+    safe = tip.replace('"', "&quot;").replace("<", "&lt;").replace(">", "&gt;")
+    mark = (f'<span class="sk-info" tabindex="0" data-tip="{safe}">i</span>'
+            if tip else "")
     st.markdown(f'<p class="sk-line">{text}{mark}</p>', unsafe_allow_html=True)
 
 
@@ -258,6 +286,8 @@ def _device_settings(cfg: dict) -> dict:
         "document": {
             **{k: document.get(k) for k in REMEMBERED_DOCUMENT if document.get(k) not in (None, "")},
             "stamp": document.get("stamp", {}),
+            "header": document.get("header", {}),
+            "footer": document.get("footer", {}),
         },
         "esign": cfg.get("esign", {}),
         "layout": {k: cfg.get("layout", {}).get(k)
@@ -314,6 +344,35 @@ def remember_template(label: str, purpose: str, powers: list[str],
     return True
 
 
+def remember_profiles(profiles: list[dict]) -> bool:
+    """Keep a few saved parties on this device, each under its own name."""
+    payload = _pack({"profile": profiles})
+    if len(payload) > COOKIE_LIMIT:
+        st.warning("Profil tersimpan sudah penuh. Hapus salah satu dulu.")
+        return False
+    secure = "; Secure" if str(getattr(st.context, "url", "")).startswith("https") else ""
+    components.html(
+        f"""<script>
+        document.cookie = "{COOKIE_PROFILES}=" + {json.dumps(payload)} +
+          "; max-age=31536000; path=/; SameSite=Lax{secure}";
+        </script>""", height=0)
+    return True
+
+
+def recall_profiles() -> list[dict]:
+    try:
+        raw = st.context.cookies.get(COOKIE_PROFILES)
+    except Exception:
+        return []
+    if not raw:
+        return []
+    try:
+        data = tomllib.loads(zlib.decompress(base64.b64decode(raw)).decode("utf-8"))
+        return [p for p in data.get("profile", []) if isinstance(p, dict)]
+    except Exception:
+        return []
+
+
 def recall_template() -> dict | None:
     try:
         raw = st.context.cookies.get(COOKIE_TEMPLATE)
@@ -332,6 +391,7 @@ def forget_on_device() -> None:
         f"""<script>
         document.cookie = "{COOKIE}=; max-age=0; path=/; SameSite=Lax";
         document.cookie = "{COOKIE_TEMPLATE}=; max-age=0; path=/; SameSite=Lax";
+        document.cookie = "{COOKIE_PROFILES}=; max-age=0; path=/; SameSite=Lax";
         </script>""", height=0)
 
 
@@ -360,48 +420,112 @@ def recall_from_device() -> dict | None:
 # the person filling the form, not to whoever gets the link.
 # --------------------------------------------------------------------------- #
 
-SHARE_KEYS = {"t": "types", "p": "place", "st": "stamp_on", "pa": "paper",
-              "fs": "font_size", "es": "esign", "bl": "blank"}
+SHARE_LIMIT = 10_000      # characters of setup we are willing to put in a link
+QR_BYTE_LIMIT = 2_900     # a single QR tops out here; the standard says so
+
+# Setup that may travel in a link. Personal fields are absent by design; only
+# the blank flags come along, since they describe the form, not a person.
+SHARE_DOCUMENT = ("type", "place", "substitution_right", "valid_until",
+                  "footnote", "clause_label", "purpose", "powers", "limits")
+SHARE_LAYOUT = ("paper", "font", "font_bold", "font_size", "fit_one_page")
+
+
+def _share_payload(types: list[str], cfg: dict) -> dict:
+    document = cfg.get("document", {})
+    payload = {
+        "types": types,
+        "document": {k: document[k] for k in SHARE_DOCUMENT
+                     if document.get(k) not in (None, "", [])},
+        "layout": {k: cfg["layout"][k] for k in SHARE_LAYOUT
+                   if cfg.get("layout", {}).get(k) is not None},
+        "esign": cfg.get("esign", {}),
+        "blank": [role for role in ("principal", "agent")
+                  if cfg.get(role, {}).get("blank")],
+    }
+    payload["document"]["stamp"] = document.get("stamp", {})
+    for section in ("header", "footer"):
+        block = document.get(section, {})
+        if any(str(v).strip() for v in block.values() if not isinstance(v, bool)):
+            payload["document"][section] = block
+    return payload
 
 
 def build_share_link(types: list[str], cfg: dict) -> str:
-    esign_bits = "".join(flag for flag, on in
-                         (("a", cfg["esign"]["anchors"]),
-                          ("j", cfg["esign"]["fields_json"]),
-                          ("f", cfg["esign"]["signature_fields"])) if on)
-    blank = [role for role in ("principal", "agent")
-             if cfg.get(role, {}).get("blank")]
-    params = {
-        "t": ",".join(types),
-        "p": cfg["document"].get("place", ""),
-        "st": cfg["document"]["stamp"]["on"] if cfg["document"]["stamp"]["enabled"] else "none",
-        "pa": cfg["layout"]["paper"],
-        "fs": str(cfg["layout"]["font_size"]),
-    }
-    if esign_bits:
-        params["es"] = esign_bits
-    if blank:
-        params["bl"] = ",".join(blank)
+    """One compressed parameter: whatever the setup happens to be, it fits.
 
+    Spelling every field out as its own query parameter got unwieldy once the
+    clause text, the kop and the footer could travel too. Compressed TOML in a
+    single `c` parameter is shorter than the readable form for anything but the
+    smallest setup, and it round-trips exactly.
+    """
+    raw = dump_toml(_share_payload(types, cfg)).encode("utf-8")
+    packed = base64.urlsafe_b64encode(zlib.compress(raw, 9)).decode("ascii")
     base = str(getattr(st.context, "url", "")) or "/"
     base = base.split("?")[0].split("#")[0]
-    return f"{base}?{urlencode({k: v for k, v in params.items() if v})}"
+    return f"{base}?c={packed}"
 
 
-def qr_png(url: str, scale: int = 9, quiet: int = 4) -> bytes:
+def setup_from_link() -> dict | None:
+    """Turn ?c=... back into a config overlay, or None when absent."""
+    try:
+        q = dict(st.query_params)
+    except Exception:
+        return None
+    packed = q.get("c")
+    if not packed:
+        return None
+    try:
+        raw = zlib.decompress(base64.urlsafe_b64decode(packed)).decode("utf-8")
+        payload = tomllib.loads(raw)
+    except Exception:
+        st.warning("Tautan setelan tidak terbaca; mungkin terpotong saat "
+                   "dikirim. Minta tautannya sekali lagi.")
+        return None
+
+    types = [t for t in payload.get("types", []) if t in TEMPLATES]
+    if not types:
+        return None
+
+    document = {k: v for k, v in payload.get("document", {}).items()
+                if k in SHARE_DOCUMENT or k in ("stamp", "header", "footer")}
+    layout = {k: v for k, v in payload.get("layout", {}).items()
+              if k in SHARE_LAYOUT}
+    overlay: dict = {"document": document, "layout": layout,
+                     "esign": payload.get("esign", {})}
+    for role in payload.get("blank", []):
+        if role in ("principal", "agent"):
+            overlay.setdefault(role, {})["blank"] = True
+    overlay["_types"] = types
+    return overlay
+
+
+def qr_png(url: str, scale: int = 9, quiet: int = 4) -> bytes | None:
     """Render the link as a QR code, so it can be saved as a picture.
 
     reportlab already ships a QR encoder and Pillow comes with it, so this
-    needs nothing beyond what the letters themselves use.
+    needs nothing beyond what the letters themselves use. Long links get the
+    lower correction level, which buys capacity; past that a QR is the wrong
+    carrier and this returns None.
     """
     from PIL import Image, ImageDraw
     from reportlab.graphics.barcode import qr
 
-    widget = qr.QrCodeWidget(url, barLevel="M")
-    widget.draw()
-    code = widget.qr
+    if len(url.encode("utf-8")) > QR_BYTE_LIMIT:
+        return None
+    code = None
+    for level in ("M", "L"):
+        try:
+            widget = qr.QrCodeWidget(url, barLevel=level)
+            widget.draw()
+            code = widget.qr
+            break
+        except Exception:
+            continue
+    if code is None:
+        return None
     n = code.getModuleCount()
 
+    scale = max(3, min(scale, 700 // (n + quiet * 2)))
     size = (n + quiet * 2) * scale
     image = Image.new("RGB", (size, size), "white")
     pen = ImageDraw.Draw(image)
@@ -493,10 +617,27 @@ def clean_nik(value: str) -> str:
 
 
 def party_form(role: str, title: str, data: dict, rev: int,
-               copy_from: dict | None = None) -> dict:
+               copy_from: dict | None = None,
+               profiles: list[dict] | None = None) -> dict:
     """Render the inputs for one party and return what the user typed."""
     rule(title)
     k = lambda field: f"{role}_{field}_{rev}"  # noqa: E731
+
+    profiles = profiles or []
+    if profiles:
+        names = [p.get("label", "Tanpa nama") for p in profiles]
+        pick, act = st.columns([3, 2])
+        with pick:
+            chosen = st.selectbox("Profil tersimpan", ["-"] + names,
+                                  key=k("profile_pick"),
+                                  label_visibility="visible")
+        with act:
+            st.markdown("<div style='height:1.55rem'></div>",
+                        unsafe_allow_html=True)
+            if chosen != "-" and st.button("Pakai profil", key=k("profile_use"),
+                                           use_container_width=True):
+                st.session_state["load_profile"] = (role, names.index(chosen))
+                st.rerun()
 
     blank = st.checkbox("Kosongkan - diisi tangan nanti",
                         value=bool(data.get("blank")), key=k("blank"),
@@ -548,6 +689,18 @@ def party_form(role: str, title: str, data: dict, rev: int,
     out["show_nik_on_signature"] = st.checkbox(
         "Tulis NIK di bawah nama pada tanda tangan",
         value=bool(data.get("show_nik_on_signature", False)), key=k("niksig"))
+
+    n1, n2 = st.columns([3, 2])
+    with n1:
+        label = st.text_input("Simpan sebagai profil",
+                              value=out.get("name", ""), key=k("profile_name"),
+                              placeholder="mis. Diri sendiri, Ibu, Kantor")
+    with n2:
+        st.markdown("<div style='height:1.55rem'></div>", unsafe_allow_html=True)
+        if st.button("Simpan profil", key=k("profile_save"),
+                     use_container_width=True, disabled=not label.strip()):
+            st.session_state["save_profile"] = (label.strip(), dict(out))
+            st.rerun()
     return out
 
 
@@ -604,6 +757,20 @@ def preview_image(cfg_toml: str, doc_type: str, scale: int = 2) -> bytes | None:
     return out.getvalue()
 
 
+def stash_upload(upload, name: str) -> str:
+    """Keep an uploaded file on disk for as long as this session lasts."""
+    if upload is None:
+        return ""
+    folder = st.session_state.get("upload_dir")
+    if not folder:
+        folder = tempfile.mkdtemp(prefix="sk-upload-")
+        st.session_state["upload_dir"] = folder
+    path = Path(folder) / f"{name}-{upload.name}"
+    if not path.exists():
+        path.write_bytes(upload.getvalue())
+    return str(path)
+
+
 def zip_bytes(files: list[tuple[str, bytes]]) -> bytes:
     buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as zf:
@@ -621,9 +788,9 @@ st.markdown(
     '<div class="sk-eyebrow">Surat kuasa · perorangan</div>'
     '<h1 class="sk-title">Pilih suratnya, isi datanya, <em>unduh</em>.</h1>'
     '<p class="sk-sub">Format resmi, satu halaman.'
-    '<span class="sk-info" title="Enam belas jenis keperluan administrasi. '
-    'Data kamu disimpan di perangkat sendiri; server ini tidak menyimpan '
-    'apa pun dan tidak memakai basis data.">i</span></p>',
+    '<span class="sk-info" tabindex="0" data-tip="Enam belas jenis keperluan '
+    'administrasi. Data kamu disimpan di perangkat sendiri; server ini tidak '
+    'menyimpan apa pun dan tidak memakai basis data.">i</span></p>',
     unsafe_allow_html=True,
 )
 
@@ -634,6 +801,25 @@ if "base" not in st.session_state:  # shipped example until the browser answers
 
 remembered = recall_from_device()
 my_template = recall_template()
+profiles = recall_profiles()
+
+pending = st.session_state.pop("save_profile", None)
+if pending:
+    label, party = pending
+    party = {k: v for k, v in party.items() if k != "same_address"}
+    party["label"] = label
+    profiles = [p for p in profiles if p.get("label") != label] + [party]
+    if remember_profiles(profiles):
+        st.toast(f"Profil \"{label}\" tersimpan di perangkat ini.")
+
+loading = st.session_state.pop("load_profile", None)
+
+if loading:
+    role, index = loading
+    if 0 <= index < len(profiles):
+        party = {k: v for k, v in profiles[index].items() if k != "label"}
+        apply_base(deep_merge(st.session_state["base"], {role: party}),
+                   f'profil {profiles[index].get("label", "")}')
 
 shared = setup_from_link()
 if shared and not st.session_state.get("link_applied"):
@@ -649,7 +835,7 @@ if remembered and not st.session_state.get("restored"):
 
 with st.sidebar:
     st.markdown('<div class="sk-eyebrow">Data kamu</div>', unsafe_allow_html=True)
-    st.markdown(f'<p class="sk-note">Sumber: {st.session_state["base_note"]}</p>',
+    st.markdown(f'<p class="sk-note">Terisi dari: {st.session_state["base_note"]}</p>',
                 unsafe_allow_html=True)
     if remembered:
         line("Tersimpan di perangkat ini.",
@@ -662,8 +848,9 @@ with st.sidebar:
             st.session_state.pop("base", None)
             st.success("Dilupakan. Muat ulang halaman untuk memastikan.")
 
-    uploaded = st.file_uploader("Muat config.toml", type=["toml"],
-                                label_visibility="visible")
+    uploaded = st.file_uploader("Buka data tersimpan", type=["toml"],
+                                help="Berkas .toml yang pernah kamu unduh dari "
+                                     "sini, atau yang dipakai versi terminal.")
     if uploaded is not None and st.session_state.get("uploaded_name") != uploaded.name:
         try:
             apply_base(tomllib.loads(uploaded.getvalue().decode("utf-8")),
@@ -674,7 +861,7 @@ with st.sidebar:
             st.error("File itu bukan config.toml yang valid.")
 
     if presets:
-        pick = st.selectbox("Contoh bawaan", ["-"] + list(presets))
+        pick = st.selectbox("Mulai dari contoh", ["-"] + list(presets))
         if pick != "-" and st.button("Pakai contoh ini", use_container_width=True):
             apply_base(dict(presets[pick]), f"contoh {pick}")
             st.rerun()
@@ -687,10 +874,12 @@ base = st.session_state["base"]
 rev = st.session_state["form_rev"]
 document = dict(base.get("document", {}))
 stamp = dict(document.get("stamp", {}))
+header_cfg = dict(document.get("header", {}))
+footer_cfg = dict(document.get("footer", {}))
 esign_cfg = dict(base.get("esign", {}))
 layout = dict(base.get("layout", {}))
 
-form_col, preview_col = st.columns([3, 2], gap="large")
+form_col, preview_col = st.columns([1, 1], gap="large")
 
 # --------------------------------------------------------------------------- #
 # Left: the form. The page scrolls normally; nothing traps the scroll.
@@ -708,9 +897,9 @@ with form_col:
         help="Pilih lebih dari satu untuk membuat beberapa surat sekaligus.")
 
     principal = party_form("principal", "Pemberi kuasa",
-                           base.get("principal", {}), rev)
+                           base.get("principal", {}), rev, profiles=profiles)
     agent = party_form("agent", "Penerima kuasa", base.get("agent", {}), rev,
-                       copy_from=principal)
+                       copy_from=principal, profiles=profiles)
 
     rule("Tempat & tanggal")
     c1, c2 = st.columns(2)
@@ -828,6 +1017,33 @@ with form_col:
                                    value=bool(layout.get("fit_one_page", True)),
                                    key=f"fit_{rev}")
 
+        font_file = st.file_uploader("Font sendiri (.ttf)", type=["ttf"],
+                                     key=f"ttf_{rev}",
+                                     help="Menimpa pilihan huruf di atas. "
+                                          "Fontnya ikut tertanam di PDF, jadi "
+                                          "surat terlihat sama di mana pun.")
+        font_bold_file = None
+        if font_file is not None:
+            font_bold_file = st.file_uploader("Font tebal (.ttf, opsional)",
+                                              type=["ttf"], key=f"ttfb_{rev}")
+
+        st.markdown('<div class="sk-eyebrow" style="margin-top:.8rem">'
+                    'Kop &amp; footer</div>', unsafe_allow_html=True)
+        header_text = st.text_area(
+            "Kop surat (opsional)", value=str(header_cfg.get("text", "") or ""),
+            height=80, key=f"head_{rev}",
+            placeholder="Baris pertama jadi judul kop\nAlamat, telepon, dst.")
+        header_rule = st.checkbox("Garis di bawah kop",
+                                  value=bool(header_cfg.get("rule", True)),
+                                  key=f"headrule_{rev}",
+                                  disabled=not header_text.strip())
+        footer_text = st.text_input(
+            "Footer halaman (opsional)",
+            value=str(footer_cfg.get("text", "") or ""), key=f"foot_p_{rev}")
+        page_numbers = st.checkbox("Nomor halaman",
+                                   value=bool(footer_cfg.get("page_numbers", False)),
+                                   key=f"pagenum_{rev}")
+
         st.markdown('<div class="sk-eyebrow" style="margin-top:.8rem">'
                     'Tanda tangan elektronik</div>', unsafe_allow_html=True)
         anchors = st.checkbox(
@@ -863,6 +1079,9 @@ cfg = {
         "stamp": {"enabled": stamp_enabled, "on": stamp_on,
                   "width_cm": float(stamp.get("width_cm", 3.0)),
                   "height_cm": float(stamp.get("height_cm", 2.0))},
+        "header": {"text": header_text, "rule": header_rule,
+                   "align": str(header_cfg.get("align", "center"))},
+        "footer": {"text": footer_text, "page_numbers": page_numbers},
     },
     "principal": principal,
     "agent": agent,
@@ -870,7 +1089,9 @@ cfg = {
               "signature_fields": want_fields},
     "layout": {"paper": paper, "font_size": font_size,
                "fit_one_page": fit_one_page,
-               "font": font_face, "font_bold": LETTER_FONTS[font_face][1]},
+               "font": font_face, "font_bold": LETTER_FONTS[font_face][1],
+               "font_file": stash_upload(font_file, "regular"),
+               "font_bold_file": stash_upload(font_bold_file, "bold")},
 }
 if len(types) == 1 and purpose is not None:
     cfg["document"]["purpose"] = purpose
@@ -887,11 +1108,12 @@ cfg_toml = dump_toml(cfg)
 
 @st.dialog("Pratinjau", width="large")
 def show_fullscreen(toml_text: str, doc_type: str) -> None:
-    png = preview_image(toml_text, doc_type, scale=3)
+    png = preview_image(toml_text, doc_type, scale=4)
     if png:
         st.markdown('<div class="sk-sheet">', unsafe_allow_html=True)
         st.image(png, use_container_width=True)
         st.markdown('</div>', unsafe_allow_html=True)
+        st.caption("Gambar bisa diperbesar lewat ikon di pojok gambar.")
 
 
 # --------------------------------------------------------------------------- #
@@ -949,35 +1171,70 @@ with preview_col:
              "Nama, NIK dan alamat tidak ikut, karena tautan mengendap di "
              "riwayat chat dan browser. Penerima mengisi datanya sendiri.")
         share_url = build_share_link(types, cfg)
-        st.code(share_url, language=None)
-
         png = qr_png(share_url)
-        q1, q2 = st.columns([1, 1])
-        with q1:
-            st.image(png, width=180)
-        with q2:
-            line("Simpan atau foto QR ini.",
-                 "Memindainya membuka app dengan setelan yang sama. Isinya "
-                 "sama persis dengan tautan di atas, tanpa data pribadi.")
-            st.download_button("Unduh QR (PNG)", png,
-                               file_name="surat-kuasa-setelan.png",
-                               mime="image/png", use_container_width=True)
+
+        if png:
+            q1, q2 = st.columns([1, 1])
+            with q1:
+                st.image(png, width=200)
+            with q2:
+                line("Pindai atau simpan QR ini.",
+                     "Memindainya membuka app dengan setelan yang sama, tanpa "
+                     "data pribadi. Simpan sebagai foto kalau perlu dipakai "
+                     "berulang.")
+                st.download_button("Unduh QR (PNG)", png,
+                                   file_name="surat-kuasa-setelan.png",
+                                   mime="image/png", use_container_width=True)
+        else:
+            line(f"Setelan ini terlalu panjang untuk satu QR "
+                 f"({len(share_url)} karakter).",
+                 "Satu QR menampung sekitar 2.900 byte menurut standarnya, "
+                 "bukan batasan app ini. Tautannya tetap bisa disalin, atau "
+                 "kirim berkas config.toml. Memangkas teks kop, footer atau "
+                 "rincian wewenang akan mengecilkan tautannya.")
+
+        if len(share_url) > SHARE_LIMIT:
+            line(f"Tautan {len(share_url)} karakter, di atas batas aman.",
+                 "Sebagian browser dan aplikasi chat memotong tautan sepanjang "
+                 "ini. Kirim berkas config.toml saja untuk setelan sebesar itu.")
+
+        if st.checkbox("Lihat tautannya", key=f"show_link_{rev}"):
+            st.code(share_url, language=None)
+            line(f"Panjang {len(share_url)} karakter.",
+                 "Setelan dipadatkan dulu sebelum masuk tautan, jadi teks kop, "
+                 "footer dan rincian wewenang pun ikut tanpa membuat tautannya "
+                 "meledak.")
 
         line("Surat jadi: kirim PDF. Data lengkap: kirim config.toml.",
              "Berkas lebih aman daripada tautan untuk data pribadi, karena "
              "tidak tertinggal di riwayat chat atau browser.")
 
     if ready:
-        png = preview_image(cfg_toml, types[0])
+        z1, z2 = st.columns([3, 2])
+        with z1:
+            zoom = st.select_slider("Perbesar", ZOOM_STEPS, value="Muat",
+                                    key=f"zoom_{rev}", label_visibility="collapsed")
+        with z2:
+            open_full = st.button("Layar penuh", use_container_width=True)
+
+        factor = ZOOM_STEPS[zoom]
+        png = preview_image(cfg_toml, types[0], scale=2 if factor == 1 else 3)
         if png:
-            st.markdown('<div class="sk-sheet">', unsafe_allow_html=True)
-            st.image(png, use_container_width=True)
-            st.markdown('</div>', unsafe_allow_html=True)
+            if factor == 1:
+                st.markdown('<div class="sk-sheet">', unsafe_allow_html=True)
+                st.image(png, use_container_width=True)
+                st.markdown('</div>', unsafe_allow_html=True)
+            else:
+                # Zoomed: a scroll box is what a magnifier should feel like.
+                with st.container(height=560):
+                    st.markdown('<div class="sk-sheet">', unsafe_allow_html=True)
+                    st.image(png, width=int(560 * factor))
+                    st.markdown('</div>', unsafe_allow_html=True)
             note = f"{TEMPLATES[types[0]]['label']} · halaman 1"
             if len(types) > 1:
                 note += f" · {len(types) - 1} jenis lain ikut dibuat"
             st.markdown(f'<p class="sk-note">{note}</p>', unsafe_allow_html=True)
-            if st.button("Lihat layar penuh", use_container_width=True):
+            if open_full:
                 show_fullscreen(cfg_toml, types[0])
         else:
             st.markdown('<p class="sk-note">Pratinjau butuh pypdfium2 '
@@ -1040,8 +1297,8 @@ with stamp_col:
 
 st.markdown(
     '<p class="sk-note" style="margin-top:2.5rem">Template, bukan nasihat hukum.'
-    '<span class="sk-info" title="Sebagian instansi mewajibkan formulir kuasa '
-    'versi mereka sendiri, jadi cek dulu ke loket tujuan. Dokumen dibuat '
-    'sementara di memori server lalu dihapus.">i</span></p>',
+    '<span class="sk-info" tabindex="0" data-tip="Sebagian instansi mewajibkan '
+    'formulir kuasa versi mereka sendiri, jadi cek dulu ke loket tujuan. '
+    'Dokumen dibuat sementara di memori server lalu dihapus.">i</span></p>',
     unsafe_allow_html=True,
 )

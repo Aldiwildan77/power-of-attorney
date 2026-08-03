@@ -36,11 +36,15 @@ opens the page at full size.
   document, not to your setup. "Lupakan data di perangkat ini" in the sidebar
   clears everything. You can also download a `config.toml`, keep it, and load it
   again later (that same file works with the CLI).
-- **Shareable setup link, with a QR code.** "Bagikan setelan ini" gives a URL
-  carrying the letter type, place, materai side, e-sign switches and page setup,
-  so a colleague opens the app already configured and fills in their own
-  details. The same link is rendered as a QR code you can download or photograph
-  - handy for a counter, a group chat or a printed note.
+- **Shareable setup link, with a QR code.** "Bagikan setelan ini" carries the
+  whole setup - letter type, place, materai side, clause text, letterhead,
+  footer, e-sign switches, page setup - compressed into a single parameter, so
+  a colleague opens the app already configured and fills in their own details.
+  It is shown as a QR to save or photograph; the link itself sits behind a
+  toggle. A QR holds about 2,900 bytes by standard, and compression keeps a
+  large setup well under that. Names, NIK and addresses never travel in it.
+- **Saved profiles.** Keep several parties on the device ("Diri sendiri",
+  "Ibu", "Kantor") and load one into either side of the letter.
   Names, NIK and addresses are never in the link: a URL survives in chat logs
   and browser history. To share a finished letter, send the PDF; to hand your
   full details to someone you trust, send the `config.toml` file instead.
@@ -236,8 +240,12 @@ yourself - the text of each lives in `templates.py`.
   under the name in the signature block; `blank` / `blank_fields` drive the
   fill-in form.
 - `[output]` - defaults only: `dir` and `pattern`. `-o` and `-d` override them.
+- `[document.header]` / `[document.footer]` - optional letterhead (text, logo,
+  rule) and page footer (small print, page numbers), drawn outside the text
+  frame on every page.
 - `[layout]` - `paper` (`A4` | `F4` | `LETTER` | `LEGAL`), margins,
-  `font` / `font_bold` (`Times-Roman`, `Courier` or `Helvetica`), `font_size`,
+  `font` / `font_bold` (`Times-Roman`, `Courier` or `Helvetica`) or your own
+  `font_file` / `font_bold_file` (.ttf, embedded), `font_size`,
   `signature_space_cm`.
 
 ### Single-page auto-fit

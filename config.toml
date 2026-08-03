@@ -26,6 +26,18 @@ footnote = ""            # optional, printed small and italic below the signatur
 # ]
 # limits = "Kuasa ini tidak memberikan kewenangan untuk ..."
 
+# Optional letterhead and page footer, drawn outside the text frame.
+[document.header]
+text = ""                # first line is the title; more lines below it
+rule = true              # a line under the letterhead
+align = "center"         # center | left
+image = ""               # optional logo (PNG/JPG), drawn on the left
+image_cm = 1.8
+
+[document.footer]
+text = ""                # small print at the bottom of every page
+page_numbers = false
+
 [document.stamp]
 # Reserves blank space for the materai. Nothing is drawn there: a printed copy
 # gets a physical stamp, an e-signed one gets the e-meterai overlay.
@@ -105,6 +117,9 @@ margin_top_cm = 2.5
 # the typewriter face used in US court filings, available if you want it.
 font = "Times-Roman"
 font_bold = "Times-Bold"
+# Or supply your own .ttf files; they get embedded in the PDF.
+font_file = ""
+font_bold_file = ""
 font_size = 11
 signature_space_cm = 2.4   # blank space left for the wet signature
 fit_one_page = true        # tighten spacing and shrink the font to fit one page

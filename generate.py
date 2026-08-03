@@ -34,7 +34,9 @@ from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY
 from reportlab.lib.pagesizes import A4, LEGAL, LETTER
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.units import cm, mm
+from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.pdfmetrics import stringWidth
+from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.platypus import (
     Flowable,
     Image,
@@ -120,13 +122,23 @@ def dump_toml(data: dict) -> str:
             return repr(value)
         if isinstance(value, (list, tuple)):
             return "[" + ", ".join(fmt(v) for v in value) + "]"
-        text = str(value).replace("\\", "\\\\").replace('"', '\\"')
+        text = (str(value)
+                .replace("\\", "\\\\")
+                .replace('"', '\\"')
+                .replace("\n", "\\n")
+                .replace("\r", "\\r")
+                .replace("\t", "\\t"))
         return f'"{text}"'
 
     lines: list[str] = []
 
+    def is_table_array(value) -> bool:
+        return (isinstance(value, (list, tuple)) and value
+                and all(isinstance(v, dict) for v in value))
+
     def emit(prefix: str, table: dict) -> None:
-        scalars = {k: v for k, v in table.items() if not isinstance(v, dict)}
+        scalars = {k: v for k, v in table.items()
+                   if not isinstance(v, dict) and not is_table_array(v)}
         if prefix:
             lines.append(f"[{prefix}]")
         for key, value in scalars.items():
@@ -136,6 +148,14 @@ def dump_toml(data: dict) -> str:
         for key, value in table.items():
             if isinstance(value, dict):
                 emit(f"{prefix}.{key}" if prefix else key, value)
+            elif is_table_array(value):
+                # [[profile]] blocks: a list of tables, one per entry.
+                name = f"{prefix}.{key}" if prefix else key
+                for entry in value:
+                    lines.append(f"[[{name}]]")
+                    for k, v in entry.items():
+                        lines.append(f"{k} = {fmt(v)}")
+                    lines.append("")
 
     emit("", data)
     return "\n".join(lines).strip() + "\n"
@@ -165,6 +185,30 @@ def format_date_id(value) -> str:
     except ValueError:
         return text  # already written by hand, e.g. "1 Juni 2026"
     return f"{d.day} {MONTHS_ID[d.month - 1]} {d.year}"
+
+
+def register_font(path: str, fallback: str) -> str:
+    """Register a .ttf so the letter can use it; fall back if it will not load.
+
+    Returns the font name to draw with. The file is embedded in the PDF, which
+    adds a few hundred kilobytes but makes the letter look the same everywhere.
+    """
+    if not path:
+        return fallback
+    file = Path(path)
+    if not file.is_file():
+        print(f"Note: font file not found, using {fallback}: {path}",
+              file=sys.stderr)
+        return fallback
+    name = f"custom-{file.stem}".replace(" ", "-")
+    if name not in pdfmetrics.getRegisteredFontNames():
+        try:
+            pdfmetrics.registerFont(TTFont(name, str(file)))
+        except Exception as exc:
+            print(f"Note: could not load {file.name} ({exc}); using {fallback}",
+                  file=sys.stderr)
+            return fallback
+    return name
 
 
 def blank_party(party: dict) -> dict:
@@ -260,8 +304,21 @@ class SignatureArea(Flowable):
 class LetterBuilder:
     def __init__(self, cfg: dict):
         self.cfg = cfg
-        self.font = get(cfg, "layout.font", "Times-Roman")
-        self.font_bold = get(cfg, "layout.font_bold", "Times-Bold")
+        self.font = register_font(get(cfg, "layout.font_file", ""),
+                                  get(cfg, "layout.font", "Times-Roman"))
+        self.font_bold = register_font(get(cfg, "layout.font_bold_file", ""),
+                                       get(cfg, "layout.font_bold", "Times-Bold"))
+        if self.font_bold == get(cfg, "layout.font_bold", "Times-Bold") \
+                and get(cfg, "layout.font_file", "") \
+                and not get(cfg, "layout.font_bold_file", ""):
+            # Only a regular face was supplied: use it for bold too, so the
+            # letter stays in one family instead of mixing two.
+            self.font_bold = self.font
+        # <b> inside a paragraph looks the bold face up by family, so the pair
+        # has to be registered as one; without this a custom font never bolds.
+        pdfmetrics.registerFontFamily(self.font, normal=self.font,
+                                      bold=self.font_bold, italic=self.font,
+                                      boldItalic=self.font_bold)
         self.base_size = float(get(cfg, "layout.font_size", 11))
         # Signature areas record themselves here while the PDF is drawn.
         self.areas: list[dict] = []
@@ -608,11 +665,85 @@ class LetterBuilder:
 
         return story
 
+
+    # -- page furniture: kop surat and a page footer ------------------------ #
+
+    def _furniture_metrics(self) -> tuple[float, float]:
+        """How much room the header and footer need, in points."""
+        cfg = self.cfg
+        head_lines = [l for l in str(get(cfg, "document.header.text", "")).splitlines()
+                      if l.strip()]
+        head = 0.0
+        if head_lines:
+            head = len(head_lines) * (self.base_size + 3) * 1.25 + 6
+        image = get(cfg, "document.header.image", "")
+        if image and Path(image).is_file():
+            head = max(head, float(get(cfg, "document.header.image_cm", 1.8)) * cm) + 6
+        if head and get(cfg, "document.header.rule", True):
+            head += 6
+
+        foot_lines = [l for l in str(get(cfg, "document.footer.text", "")).splitlines()
+                      if l.strip()]
+        foot = 0.0
+        if foot_lines or get(cfg, "document.footer.page_numbers", False):
+            foot = (len(foot_lines) or 1) * (self.base_size - 1) * 1.35 + 6
+        return head, foot
+
+    def _draw_furniture(self, canvas, doc) -> None:
+        """Paint the header and footer outside the text frame, on every page."""
+        cfg = self.cfg
+        page_w, page_h = doc.pagesize
+        margin = doc.leftMargin
+        head, foot = self._furniture_metrics()
+
+        if head:
+            top = page_h - float(get(cfg, "layout.margin_top_cm", 2.5)) * cm
+            canvas.saveState()
+            image = get(cfg, "document.header.image", "")
+            text_left = margin
+            if image and Path(image).is_file():
+                size = float(get(cfg, "document.header.image_cm", 1.8)) * cm
+                canvas.drawImage(image, margin, top - size, width=size,
+                                 height=size, preserveAspectRatio=True,
+                                 anchor="nw", mask="auto")
+                text_left = margin + size + 0.4 * cm
+
+            lines = [l for l in str(get(cfg, "document.header.text", "")).splitlines()
+                     if l.strip()]
+            align = str(get(cfg, "document.header.align", "center")).lower()
+            y = top
+            for i, text in enumerate(lines):
+                size = self.base_size + (2 if i == 0 else -0.5)
+                canvas.setFont(self.font_bold if i == 0 else self.font, size)
+                y -= size * 1.25
+                if align == "center":
+                    canvas.drawCentredString(page_w / 2, y, text)
+                else:
+                    canvas.drawString(text_left, y, text)
+            if get(cfg, "document.header.rule", True):
+                canvas.setLineWidth(0.8)
+                canvas.line(margin, y - 5, page_w - margin, y - 5)
+            canvas.restoreState()
+
+        if foot:
+            canvas.saveState()
+            canvas.setFont(self.font, self.base_size - 1.5)
+            canvas.setFillColor(colors.HexColor("#555555"))
+            y = doc.bottomMargin - foot + (self.base_size - 1) * 1.35
+            for text in [l for l in str(get(cfg, "document.footer.text", "")).splitlines()
+                         if l.strip()]:
+                canvas.drawCentredString(page_w / 2, y, text)
+                y -= (self.base_size - 1) * 1.35
+            if get(cfg, "document.footer.page_numbers", False):
+                canvas.drawRightString(page_w - margin, y, f"Halaman {doc.page}")
+            canvas.restoreState()
+
     def _template(self, target, page, margin, margin_top, principal):
+        head, foot = self._furniture_metrics()
         return SimpleDocTemplate(
             target, pagesize=page,
             leftMargin=margin, rightMargin=margin,
-            topMargin=margin_top, bottomMargin=margin,
+            topMargin=margin_top + head, bottomMargin=margin + foot,
             title=f"Surat Kuasa - {principal.get('name', '')}",
             author=principal.get("name", ""), subject="Surat Kuasa",
         )
@@ -627,7 +758,9 @@ class LetterBuilder:
         buffer = io.BytesIO()
         doc = self._template(buffer, page, margin, margin_top, principal)
         self.areas.clear()
-        doc.build(self._story(doc.width, scale, size))
+        doc.build(self._story(doc.width, scale, size),
+                  onFirstPage=self._draw_furniture,
+                  onLaterPages=self._draw_furniture)
         return doc.page, buffer.getvalue()
 
     def build(self, output: Path) -> Path:
