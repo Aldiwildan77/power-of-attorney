@@ -1224,25 +1224,23 @@ with preview_col:
                      key=f"full_{rev}_{doc_type}"):
             show_fullscreen(cfg_toml, doc_type)
 
+    # The picker stays put whatever is selected, so the preview never jumps
+    # between layouts while letters are being added or removed.
+    shown = st.selectbox("Lihat pratinjau", types or ["-"],
+                         key=f"pv_{rev}_{'-'.join(types)}",
+                         format_func=lambda t: TEMPLATES[t]["label"] if t in TEMPLATES
+                         else "Belum ada jenis dipilih",
+                         disabled=not types, label_visibility="collapsed")
+
     if not ready:
-        st.markdown('<p class="sk-note">Pratinjau muncul setelah nama '
-                    'terisi.</p>', unsafe_allow_html=True)
-    elif len(types) == 1:
-        draw_preview(types[0])
-    elif len(types) <= 5:
-        # A tab per letter: every one is visible without hunting for it.
-        for tab, doc_type in zip(st.tabs(types), types):
-            with tab:
-                draw_preview(doc_type)
+        st.markdown('<p class="sk-note">Pratinjau muncul setelah jenis surat '
+                    'dipilih dan nama terisi.</p>', unsafe_allow_html=True)
     else:
-        # Past a handful, rendering them all on every keystroke is wasteful.
-        shown = st.selectbox("Lihat pratinjau", types, key=f"pv_{rev}",
-                             format_func=lambda t: TEMPLATES[t]["label"],
-                             label_visibility="collapsed")
-        draw_preview(shown)
-        st.markdown(f'<p class="sk-note">{len(types)} jenis dipilih; semuanya '
-                    'ikut dibuat saat kamu menekan Buat surat.</p>',
-                    unsafe_allow_html=True)
+        draw_preview(shown if shown in types else types[0])
+        if len(types) > 1:
+            st.markdown(f'<p class="sk-note">{len(types)} jenis dipilih; '
+                        'semuanya ikut dibuat saat kamu menekan Buat '
+                        'surat.</p>', unsafe_allow_html=True)
 
     rule("Buat surat")
     if missing:
