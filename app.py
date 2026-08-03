@@ -25,6 +25,7 @@ import tomllib
 import zipfile
 import zlib
 from pathlib import Path
+from urllib.parse import urlencode
 
 import streamlit as st
 import streamlit.components.v1 as components
@@ -321,6 +322,79 @@ def recall_from_device() -> dict | None:
         return None
 
 
+# --------------------------------------------------------------------------- #
+# Shareable setup link
+#
+# The link carries the setup only: which letter, where it is signed, materai
+# side, e-sign switches, page setup. Never a name, a NIK or an address - a URL
+# ends up in chat logs, browser history and link previews, and those belong to
+# the person filling the form, not to whoever gets the link.
+# --------------------------------------------------------------------------- #
+
+SHARE_KEYS = {"t": "types", "p": "place", "st": "stamp_on", "pa": "paper",
+              "fs": "font_size", "es": "esign", "bl": "blank"}
+
+
+def build_share_link(types: list[str], cfg: dict) -> str:
+    esign_bits = "".join(flag for flag, on in
+                         (("a", cfg["esign"]["anchors"]),
+                          ("j", cfg["esign"]["fields_json"]),
+                          ("f", cfg["esign"]["signature_fields"])) if on)
+    blank = [role for role in ("principal", "agent")
+             if cfg.get(role, {}).get("blank")]
+    params = {
+        "t": ",".join(types),
+        "p": cfg["document"].get("place", ""),
+        "st": cfg["document"]["stamp"]["on"] if cfg["document"]["stamp"]["enabled"] else "none",
+        "pa": cfg["layout"]["paper"],
+        "fs": str(cfg["layout"]["font_size"]),
+    }
+    if esign_bits:
+        params["es"] = esign_bits
+    if blank:
+        params["bl"] = ",".join(blank)
+
+    base = str(getattr(st.context, "url", "")) or "/"
+    base = base.split("?")[0].split("#")[0]
+    return f"{base}?{urlencode({k: v for k, v in params.items() if v})}"
+
+
+def setup_from_link() -> dict | None:
+    """Turn ?t=skck&pa=F4&... into a config overlay, or None when absent."""
+    try:
+        q = dict(st.query_params)
+    except Exception:
+        return None
+    if not q.get("t"):
+        return None
+
+    types = [t for t in q["t"].split(",") if t in TEMPLATES]
+    if not types:
+        return None
+
+    overlay: dict = {"document": {"type": types[0]}, "layout": {}, "esign": {}}
+    if q.get("p"):
+        overlay["document"]["place"] = q["p"]
+    if q.get("st"):
+        overlay["document"]["stamp"] = ({"enabled": False} if q["st"] == "none"
+                                        else {"enabled": True, "on": q["st"]})
+    if q.get("pa") in PAGE_SIZES:
+        overlay["layout"]["paper"] = q["pa"]
+    try:
+        if q.get("fs"):
+            overlay["layout"]["font_size"] = float(q["fs"])
+    except ValueError:
+        pass
+    bits = q.get("es", "")
+    overlay["esign"] = {"anchors": "a" in bits, "fields_json": "j" in bits,
+                        "signature_fields": "f" in bits}
+    for role in q.get("bl", "").split(","):
+        if role in ("principal", "agent"):
+            overlay.setdefault(role, {})["blank"] = True
+    overlay["_types"] = types
+    return overlay
+
+
 def deep_merge(base: dict, overlay: dict) -> dict:
     """Overlay wins, but nested tables merge instead of replacing wholesale."""
     merged = dict(base)
@@ -502,6 +576,14 @@ if "base" not in st.session_state:  # shipped example until the browser answers
 
 remembered = recall_from_device()
 my_template = recall_template()
+
+shared = setup_from_link()
+if shared and not st.session_state.get("link_applied"):
+    st.session_state["link_applied"] = True
+    link_types = shared.pop("_types")
+    st.session_state["types_from_link"] = link_types
+    apply_base(deep_merge(st.session_state["base"], shared),
+               "setelan dari tautan")
 if remembered and not st.session_state.get("restored"):
     st.session_state["restored"] = True
     apply_base(deep_merge(st.session_state["base"], remembered),
@@ -560,10 +642,10 @@ form_col, preview_col = st.columns([3, 2], gap="large")
 with form_col:
     rule("Keperluan")
     type_keys = sorted(TEMPLATES)
-    default_type = (document.get("type") if document.get("type") in TEMPLATES
-                    else "umum")
+    default_types = st.session_state.get("types_from_link") or [
+        document.get("type") if document.get("type") in TEMPLATES else "umum"]
     types = st.multiselect(
-        "Jenis surat kuasa", type_keys, default=[default_type],
+        "Jenis surat kuasa", type_keys, default=default_types,
         format_func=lambda k: f"{TEMPLATES[k]['label']}  ({k})",
         key=f"types_{rev}",
         help="Pilih lebih dari satu untuk membuat beberapa surat sekaligus.")
@@ -793,6 +875,17 @@ with preview_col:
                 key=f"remember_{rev}",
                 help="Disimpan sebagai cookie di browser ini, bukan di server. "
                      "Bisa dihapus lewat sidebar.")
+
+    with st.expander("Bagikan setelan ini"):
+        st.markdown('<p class="sk-note">Tautan ini membawa jenis surat, tempat, '
+                    'materai, e-sign dan tata letak. Nama, NIK dan alamat tidak '
+                    'ikut - penerima tautan mengisi datanya sendiri.</p>',
+                    unsafe_allow_html=True)
+        st.code(build_share_link(types, cfg), language=None)
+        st.markdown('<p class="sk-note">Mau berbagi surat yang sudah jadi? '
+                    'Kirim PDF-nya langsung. Mau berbagi data lengkap dengan '
+                    'orang yang kamu percaya? Kirim berkas config.toml, bukan '
+                    'tautan.</p>', unsafe_allow_html=True)
 
     if ready:
         png = preview_image(cfg_toml, types[0])
