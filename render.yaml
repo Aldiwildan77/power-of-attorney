@@ -1,0 +1,12 @@
+# One-click blueprint for Render. Free plan includes managed TLS and up to two
+# custom domains; the service sleeps after 15 minutes idle and takes about a
+# minute to wake.
+services:
+  - type: web
+    name: surat-kuasa
+    runtime: docker
+    plan: free
+    region: singapore          # closest to Indonesia
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /_stcore/health
+    autoDeploy: true

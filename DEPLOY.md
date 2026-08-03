@@ -19,10 +19,13 @@ so the first hit after idle takes a few seconds.
 
 ## Hugging Face Spaces — free, no GitHub required
 
-1. Create a Space → SDK **Streamlit** → hardware "CPU basic (free)".
+The built-in Streamlit SDK is deprecated, so pick the **Docker** SDK; the
+`Dockerfile` in this repo is all it needs.
+
+1. Create a Space → SDK **Docker** → hardware "CPU basic (free)".
 2. Push these files to the Space repo.
-3. The Space's own `README.md` must start with the frontmatter below (keep the
-   project README underneath it, or use a separate one):
+3. The Space's own `README.md` must start with this frontmatter (keep the
+   project README underneath it):
 
 ```yaml
 ---
@@ -30,14 +33,40 @@ title: Surat Kuasa
 emoji: 📄
 colorFrom: indigo
 colorTo: gray
-sdk: streamlit
-sdk_version: 1.60.0
-app_file: app.py
+sdk: docker
+app_port: 8501
 pinned: false
 ---
 ```
 
-## Anywhere else (Fly.io, Render, Cloud Run, a VPS)
+## Your own domain
+
+Community Cloud only gives you a subdomain — `something.streamlit.app`. A
+domain of your own means hosting the container somewhere else:
+
+| Host | Custom domain | Cost | Trade-off |
+| --- | --- | --- | --- |
+| Streamlit Community Cloud | ✗ subdomain only | free | simplest, but the URL is theirs |
+| **Render (free plan)** | ✓ up to 2, TLS included | free | sleeps after 15 min idle, ~1 min to wake |
+| Google Cloud Run | ✓ domain mapping, TLS included | usage-based, free tier covers light traffic | needs a GCP project; fastest cold start |
+| Hugging Face Spaces | ✓ CNAME to `hf.space` | needs PRO or Team plan | free tier is subdomain only |
+| VPS + Caddy | ✓ | a few dollars a month | you patch the box |
+
+Render is the shortest path to `suratkuasa.example.com` at no cost:
+
+1. render.com → **New → Blueprint** → pick this repo. `render.yaml` sets the
+   Docker runtime, the free plan, the Singapore region and the health check.
+2. Once it is live: service → **Settings → Custom Domains → Add**.
+3. At your DNS provider add what Render shows you — a `CNAME` for a subdomain
+   (`suratkuasa` → `<service>.onrender.com`), or an `ALIAS`/`ANAME` plus the
+   given `A` record for a bare domain.
+4. Wait for verification; the TLS certificate is issued automatically.
+
+Do not try to point a custom domain at a `*.streamlit.app` app through a
+reverse proxy: the websocket connection and the app's own host checks make it
+brittle, and it works around a limit the platform states plainly.
+
+## Anywhere else (Fly.io, Cloud Run, a VPS)
 
 The included `Dockerfile` binds to `$PORT` and ships a health check on
 `/_stcore/health`.
