@@ -1,0 +1,10 @@
+# Web UI + CLI. Pinned so a deploy builds the same way twice.
+reportlab==5.0.0
+streamlit==1.60.0
+pypdfium2==5.12.1     # renders the live preview
+
+# Optional extras (install if you need them):
+#   pyyaml==6.0.2     YAML configs (.yaml/.yml)
+#   pyhanko==0.36.2   empty AcroForm signature fields (--esign) and PAdES
+#                     signing (--sign). Anchor strings and the .fields.json
+#                     sidecar work without it.

@@ -1,0 +1,40 @@
+# Same schema in YAML (needs: pip install pyyaml).
+#   python generate.py -c examples/dukcapil.yaml
+
+document:
+  type: dukcapil
+  place: Denpasar
+  date: 2026-08-18
+  footnote: "Lampiran: fotokopi KK dan KTP pemberi & penerima kuasa."
+  stamp:
+    enabled: true
+    on: principal
+
+principal:
+  name: I WAYAN SUDIRA
+  nik: "5171010703860013"
+  birth: "Denpasar, 7 Maret 1986"
+  occupation: Wiraswasta
+  address: Jl. Gatot Subroto Timur No. 21
+  rt_rw: 002/005
+  village: Tonja
+  district: Denpasar Utara
+  city: Denpasar
+  province: Bali
+  phone: 0819-1122-3344
+
+agent:
+  name: NI KADEK AYU
+  nik: "5171016412890014"
+  birth: "Denpasar, 24 Desember 1989"
+  occupation: Karyawan Swasta
+  address: Jl. Gatot Subroto Timur No. 21
+  rt_rw: 002/005
+  village: Tonja
+  district: Denpasar Utara
+  city: Denpasar
+  province: Bali
+  phone: 0819-4433-2211
+
+output:
+  dir: output/dukcapil

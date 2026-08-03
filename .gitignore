@@ -1,0 +1,28 @@
+# Generated letters and their sidecars
+output/
+*.pdf
+*.fields.json
+
+# Signing material — never commit these
+*.p12
+*.pfx
+*.pem
+*.key
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+
+# Tooling caches
+.code-review-graph/

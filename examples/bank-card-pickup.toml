@@ -1,0 +1,59 @@
+# Bank paperwork with a hard limit: no money may be moved.
+# Shows a letter number, an expiry line and custom clause text.
+#   python generate.py -c examples/bank-card-pickup.toml
+
+[document]
+type = "bank"
+number = "012/SK-ADM/VIII/2026"
+place = "Bandung"
+date = "2026-08-14"
+substitution_right = false
+valid_until = "Surat kuasa ini berlaku selama 30 (tiga puluh) hari sejak tanggal ditandatangani."
+
+purpose = """Untuk mewakili Pemberi Kuasa dalam mengurus administrasi perbankan pada \
+Bank Contoh Nusantara Kantor Cabang Bandung Dago, atas rekening nomor 1234567890 \
+milik Pemberi Kuasa."""
+powers = [
+  "Mengambil kartu ATM pengganti dan buku tabungan milik Pemberi Kuasa.",
+  "Mengambil rekening koran dan surat keterangan bank.",
+  "Mengajukan perubahan data nasabah (alamat dan nomor telepon).",
+  "Menandatangani formulir dan tanda terima administrasi yang diperlukan.",
+]
+limits = """Kuasa ini TIDAK memberikan kewenangan untuk menarik dana, \
+memindahbukukan dana, membuka atau menutup rekening, mengajukan pinjaman, \
+maupun melakukan transaksi keuangan dalam bentuk apa pun."""
+
+[document.stamp]
+enabled = true
+on = "principal"
+
+[principal]
+name = "BUDI HARTONO"
+nik = "3273012208880003"
+birth = "Bandung, 22 Agustus 1988"
+occupation = "Pegawai Negeri Sipil"
+address = "Jl. Cikutra Barat No. 88"
+rt_rw = "005/011"
+village = "Cikutra"
+district = "Cibeunying Kidul"
+city = "Bandung"
+province = "Jawa Barat"
+phone = "0811-2200-3300"
+show_nik_on_signature = true
+
+[agent]
+name = "DEWI ANGGRAINI"
+nik = "3273016009910004"
+birth = "Bandung, 20 September 1991"
+occupation = "Karyawan Swasta"
+address = "Jl. Cikutra Barat No. 88"
+rt_rw = "005/011"
+village = "Cikutra"
+district = "Cibeunying Kidul"
+city = "Bandung"
+province = "Jawa Barat"
+phone = "0812-9900-1100"
+show_nik_on_signature = true
+
+[output]
+dir = "output/bank-card-pickup"

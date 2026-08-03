@@ -1,0 +1,109 @@
+# =============================================================================
+# Your default details. Fill this in once, then just pick a letter and generate:
+#   python generate.py            -> interactive menu
+#   python generate.py --list-types
+# Everything under [output] is only a default; -o / -d override it.
+# =============================================================================
+
+[document]
+# dukcapil | bpjs_tk | bpjs_kes | pajak | imigrasi | skck | kendaraan | bank |
+# hr | pendidikan | asuransi | instansi | utilitas | ambil_dokumen | umum
+type = "skck"
+
+number = ""              # optional, e.g. "001/SK/VI/2026". Empty = no number line
+place = "Jakarta"        # place of signing. Empty = principal's city
+date = "auto"            # "auto" (today), "2026-06-01", or "1 Juni 2026"
+substitution_right = false   # true = the agent may delegate the power onward
+valid_until = ""         # optional, e.g. "Surat kuasa ini berlaku sampai dengan 31 Desember 2026."
+clause_label = "K H U S U S"
+footnote = ""            # optional, printed small and italic below the signatures
+
+# Override the template text (optional — comment out to use the template):
+# purpose = "Untuk mewakili Pemberi Kuasa dalam ..."
+# powers = [
+#   "Mengambil dokumen X.",
+#   "Menandatangani tanda terima.",
+# ]
+# limits = "Kuasa ini tidak memberikan kewenangan untuk ..."
+
+[document.stamp]
+# Reserves blank space for the materai. Nothing is drawn there: a printed copy
+# gets a physical stamp, an e-signed one gets the e-meterai overlay.
+enabled = true
+on = "principal"         # principal | agent | both
+width_cm = 3.0
+height_cm = 2.0
+image = ""               # optional PNG/JPG (e-meterai, scanned stamp) to paste in
+
+# -----------------------------------------------------------------------------
+# Pemberi Kuasa — the person granting the power (that's you).
+[principal]
+name = "NAMA PEMBERI KUASA"
+nik = "1234 5678 9012 3456"
+birth = ""               # optional, e.g. "Jakarta, 17 Agustus 1990"
+occupation = ""          # optional
+position = ""            # optional (when signing on behalf of a company)
+address = "Jl. Contoh Alamat No. 10"
+rt_rw = "99/99"
+village = "Nama Kelurahan"      # kelurahan
+district = "Nama Kecamatan"     # kecamatan
+city = "Nama Kota"
+province = "Nama Provinsi"
+phone = ""               # optional
+attach_id_copy = true    # print "(fotokopi KTP terlampir)" after the NIK
+show_nik_on_signature = false   # print the NIK under the name in the signature block
+blank = false            # true = print dotted lines instead of the data
+
+# -----------------------------------------------------------------------------
+# Penerima Kuasa — the person receiving the power.
+[agent]
+name = "NAMA PENERIMA KUASA"
+nik = "2345 6789 0123 4567"
+birth = ""
+occupation = ""
+position = ""
+address = "Jl. Contoh Alamat No. 20"
+rt_rw = "99/99"
+village = "Nama Kelurahan"
+district = "Nama Kecamatan"
+city = "Nama Kota"
+province = "Nama Provinsi"
+phone = ""
+attach_id_copy = true
+show_nik_on_signature = false
+
+# Blank form: the agent's data becomes dotted lines to fill in by hand.
+# Same as the --blank-agent flag.
+blank = false
+# Standard blank rows: Nama, Alamat, Kelurahan/Kecamatan, Kota/Provinsi, NIK.
+# Add optional rows here, e.g. ["birth", "occupation", "phone"].
+blank_fields = []
+
+# -----------------------------------------------------------------------------
+# E-signature support (Privy, DocuSign, Adobe Sign, …). --esign turns all three
+# on at once; signing itself stays CLI-only because it needs your certificate.
+[esign]
+anchors = false          # invisible anchor strings on the signature areas
+anchor_principal = "/ttd_pemberi/"
+anchor_agent = "/ttd_penerima/"
+fields_json = false      # write <name>.fields.json with the signature coordinates
+signature_fields = false # empty AcroForm signature fields (needs pyhanko)
+
+# -----------------------------------------------------------------------------
+# Defaults only — -o (path/pattern) and -d (folder) win over these.
+[output]
+dir = "output"
+# Placeholders: {type} {date} {principal} {agent}
+pattern = "surat-kuasa-{type}.pdf"
+
+[layout]
+paper = "A4"             # A4 | F4 | LETTER | LEGAL
+margin_cm = 2.5
+margin_top_cm = 2.5
+font = "Times-Roman"
+font_bold = "Times-Bold"
+font_size = 11
+signature_space_cm = 2.4   # blank space left for the wet signature
+fit_one_page = true        # tighten spacing and shrink the font to fit one page
+font_size_min = 8.5        # floor for that shrinking (raise it if you'd rather
+                           # have two pages than small type)

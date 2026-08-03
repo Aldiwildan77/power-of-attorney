@@ -1,0 +1,44 @@
+name: ci
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  letters:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - run: pip install -r requirements.txt
+
+      - name: Compile
+        run: python -m compileall -q generate.py app.py esign.py templates.py
+
+      - name: Every letter type renders on a single page
+        run: |
+          python generate.py --all -o "out/{type}.pdf"
+          python generate.py --all --blank-agent -o "out/blank/{type}.pdf"
+          python - <<'PY'
+          import glob, sys
+          import pypdfium2 as pdfium
+
+          files = sorted(glob.glob("out/**/*.pdf", recursive=True))
+          assert len(files) == 30, f"expected 30 PDFs, got {len(files)}"
+          long = [(f, len(pdfium.PdfDocument(f))) for f in files
+                  if len(pdfium.PdfDocument(f)) != 1]
+          if long:
+              sys.exit(f"these letters spill past one page: {long}")
+          print(f"{len(files)} letters, all one page")
+          PY
+
+      - name: Example configs still load
+        run: |
+          for f in examples/*.toml examples/*.json; do
+            python generate.py -c "$f" -d out/examples
+          done

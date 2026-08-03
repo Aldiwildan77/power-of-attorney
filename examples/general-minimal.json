@@ -1,0 +1,29 @@
+{
+  "_comment": "Smallest possible config, in JSON. Run: python generate.py -c examples/general-minimal.json",
+  "document": {
+    "type": "umum",
+    "place": "Medan",
+    "date": "2026-08-25"
+  },
+  "principal": {
+    "name": "HENDRA GUNAWAN",
+    "nik": "1271011409850011",
+    "address": "Jl. Gatot Subroto No. 150",
+    "village": "Sei Sikambing",
+    "district": "Medan Petisah",
+    "city": "Medan",
+    "province": "Sumatera Utara"
+  },
+  "agent": {
+    "name": "MAYA SARI",
+    "nik": "1271015703920012",
+    "address": "Jl. Gatot Subroto No. 150",
+    "village": "Sei Sikambing",
+    "district": "Medan Petisah",
+    "city": "Medan",
+    "province": "Sumatera Utara"
+  },
+  "output": {
+    "dir": "output/general-minimal"
+  }
+}

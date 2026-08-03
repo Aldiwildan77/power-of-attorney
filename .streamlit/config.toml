@@ -1,0 +1,22 @@
+# Theme for app.py. The chrome is a dark "desk"; the only paper on screen is
+# the rendered letter itself.
+[theme]
+base = "dark"
+primaryColor = "#3D6FE3"
+backgroundColor = "#0F1520"
+secondaryBackgroundColor = "#171E2A"
+textColor = "#E7ECF5"
+
+[client]
+# No developer menu in production; errors go to the server log, not the page.
+toolbarMode = "minimal"
+showErrorDetails = false
+
+[browser]
+gatherUsageStats = false
+
+[server]
+headless = true
+enableXsrfProtection = true
+# The app uploads nothing bigger than a config file.
+maxUploadSize = 5

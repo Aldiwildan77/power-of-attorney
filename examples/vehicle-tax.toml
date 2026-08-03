@@ -1,0 +1,56 @@
+# Annual vehicle tax + STNK pickup at Samsat. Printed on F4 paper.
+#   python generate.py -c examples/vehicle-tax.toml
+
+[document]
+type = "kendaraan"
+place = "Semarang"
+date = "2026-09-01"
+footnote = "Lampiran: STNK asli, BPKB (fotokopi), KTP pemberi & penerima kuasa."
+
+purpose = """Untuk mewakili Pemberi Kuasa dalam mengurus administrasi kendaraan bermotor \
+atas nama Pemberi Kuasa dengan nomor polisi H 1234 XYZ, merek Toyota Avanza tahun 2021, \
+pada Kantor Bersama Samsat Semarang I."""
+powers = [
+  "Melakukan pembayaran pajak kendaraan bermotor tahunan.",
+  "Mengurus pengesahan dan pengambilan STNK.",
+  "Menyerahkan dan mengambil dokumen pada Kantor Samsat.",
+  "Menandatangani formulir dan tanda terima administrasi yang diperlukan.",
+]
+limits = """Kuasa ini tidak memberikan kewenangan untuk menjual, mengalihkan, \
+menjaminkan, maupun membalik nama kepemilikan kendaraan bermotor tersebut."""
+
+[document.stamp]
+enabled = true
+on = "principal"
+
+[principal]
+name = "SLAMET WIDODO"
+nik = "3374011106870007"
+birth = "Semarang, 11 Juni 1987"
+occupation = "Wiraswasta"
+address = "Jl. Pandanaran No. 77"
+rt_rw = "003/004"
+village = "Pekunden"
+district = "Semarang Tengah"
+city = "Semarang"
+province = "Jawa Tengah"
+phone = "0821-2233-4455"
+
+[agent]
+name = "AGUS SETIAWAN"
+nik = "3374010209900008"
+birth = "Semarang, 2 September 1990"
+occupation = "Karyawan Swasta"
+address = "Jl. Pandanaran No. 79"
+rt_rw = "003/004"
+village = "Pekunden"
+district = "Semarang Tengah"
+city = "Semarang"
+province = "Jawa Tengah"
+phone = "0821-5544-3322"
+
+[output]
+dir = "output/vehicle-tax"
+
+[layout]
+paper = "F4"

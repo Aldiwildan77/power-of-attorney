@@ -1,0 +1,52 @@
+# Collect a paklaring (employment reference) from a former employer.
+#   python generate.py -c examples/hr-employment-letter.toml
+
+[document]
+type = "hr"
+number = "003/SK/VIII/2026"
+place = "Surabaya"
+date = "2026-08-20"
+footnote = "Lampiran: fotokopi KTP kedua belah pihak dan fotokopi ID card karyawan."
+
+purpose = """Untuk mewakili Pemberi Kuasa dalam mengurus administrasi kepegawaian \
+pada PT Sinar Karya Mandiri, tempat Pemberi Kuasa pernah bekerja sampai dengan \
+31 Juli 2026."""
+powers = [
+  "Mengambil surat keterangan kerja (paklaring) dan surat pengalaman kerja.",
+  "Mengambil slip gaji terakhir dan dokumen payroll.",
+  "Mengambil dokumen personalia lain milik Pemberi Kuasa.",
+  "Menandatangani formulir dan tanda terima administrasi yang diperlukan.",
+]
+
+[document.stamp]
+enabled = true
+on = "principal"
+
+[principal]
+name = "RIZKY PRATAMA"
+nik = "3578011503930005"
+birth = "Surabaya, 15 Maret 1993"
+occupation = "Karyawan Swasta"
+address = "Jl. Rungkut Asri Tengah No. 12"
+rt_rw = "002/006"
+village = "Rungkut Kidul"
+district = "Rungkut"
+city = "Surabaya"
+province = "Jawa Timur"
+phone = "0857-1234-5678"
+
+[agent]
+name = "LINDA MARLINA"
+nik = "3578012810940006"
+birth = "Surabaya, 28 Oktober 1994"
+occupation = "Karyawan Swasta"
+address = "Jl. Rungkut Asri Tengah No. 12"
+rt_rw = "002/006"
+village = "Rungkut Kidul"
+district = "Rungkut"
+city = "Surabaya"
+province = "Jawa Timur"
+phone = "0857-8765-4321"
+
+[output]
+dir = "output/hr-employment-letter"

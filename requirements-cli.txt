@@ -1,0 +1,2 @@
+# Minimal set for the command line only (no web UI).
+reportlab==5.0.0

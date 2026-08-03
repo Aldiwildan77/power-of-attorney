@@ -1,0 +1,15 @@
+.git
+.github
+output
+__pycache__
+*.py[cod]
+.venv
+venv
+*.p12
+*.pfx
+*.pem
+*.key
+.env
+.DS_Store
+.code-review-graph
+.claude

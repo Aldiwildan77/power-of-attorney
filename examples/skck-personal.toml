@@ -1,0 +1,42 @@
+# Ask a relative to collect your SKCK (police clearance certificate).
+#   python generate.py -c examples/skck-personal.toml
+
+[document]
+type = "skck"
+place = "Jakarta Selatan"
+date = "2026-08-10"
+substitution_right = false
+footnote = "Lampiran: fotokopi KTP pemberi kuasa dan penerima kuasa."
+
+[document.stamp]
+enabled = true
+on = "principal"
+
+[principal]
+name = "SITI RAHMAWATI"
+nik = "3174054503950002"
+birth = "Jakarta, 5 Maret 1995"
+occupation = "Karyawan Swasta"
+address = "Jl. Kebagusan Raya No. 45"
+rt_rw = "004/002"
+village = "Kebagusan"
+district = "Pasar Minggu"
+city = "Jakarta Selatan"
+province = "DKI Jakarta"
+phone = "0812-1111-2222"
+
+[agent]
+name = "AHMAD FAUZI"
+nik = "3174051207920001"
+birth = "Jakarta, 12 Juli 1992"
+occupation = "Wiraswasta"
+address = "Jl. Kebagusan Raya No. 45"
+rt_rw = "004/002"
+village = "Kebagusan"
+district = "Pasar Minggu"
+city = "Jakarta Selatan"
+province = "DKI Jakarta"
+phone = "0813-3333-4444"
+
+[output]
+dir = "output/skck-personal"

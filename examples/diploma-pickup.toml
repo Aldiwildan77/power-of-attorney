@@ -1,0 +1,50 @@
+# Collect a diploma and transcript from campus. No stamp duty: some campuses
+# only ask for a signature plus an ID copy.
+#   python generate.py -c examples/diploma-pickup.toml
+
+[document]
+type = "pendidikan"
+place = "Yogyakarta"
+date = "auto"
+footnote = "Lampiran: fotokopi KTP, kartu mahasiswa, dan bukti bebas tanggungan."
+
+purpose = """Untuk mewakili Pemberi Kuasa dalam mengurus administrasi kelulusan pada \
+Universitas Contoh Yogyakarta, Fakultas Teknik, atas nama Pemberi Kuasa dengan \
+Nomor Induk Mahasiswa 18/123456/TK/47890."""
+powers = [
+  "Mengambil ijazah, transkrip nilai, dan sertifikat milik Pemberi Kuasa.",
+  "Mengurus legalisasi dokumen pendidikan.",
+  "Menandatangani tanda terima dokumen.",
+]
+
+[document.stamp]
+enabled = false
+
+[principal]
+name = "NADIA PUTRI"
+nik = "3471042505000009"
+birth = "Yogyakarta, 25 Mei 2000"
+occupation = "Mahasiswa"
+address = "Jl. Kaliurang KM 5 No. 30"
+rt_rw = "001/003"
+village = "Caturtunggal"
+district = "Depok"
+city = "Sleman"
+province = "DI Yogyakarta"
+phone = "0895-1010-2020"
+
+[agent]
+name = "BAGAS PRASETYO"
+nik = "3471041708980010"
+birth = "Sleman, 17 Agustus 1998"
+occupation = "Karyawan Swasta"
+address = "Jl. Kaliurang KM 5 No. 30"
+rt_rw = "001/003"
+village = "Caturtunggal"
+district = "Depok"
+city = "Sleman"
+province = "DI Yogyakarta"
+phone = "0896-3030-4040"
+
+[output]
+dir = "output/diploma-pickup"
