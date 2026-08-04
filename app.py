@@ -907,11 +907,17 @@ with form_col:
                                value=str(document.get("number", "") or ""),
                                key=f"number_{rev}")
     with c2:
-        use_today = st.checkbox("Pakai tanggal hari ini", value=True,
-                                key=f"today_{rev}")
+        saved_date = str(document.get("date", "auto") or "auto")
+        modes = ["Hari ini", "Pilih tanggal", "Kosongkan"]
+        mode = st.radio("Tanggal", modes, horizontal=True, key=f"datemode_{rev}",
+                        index=modes.index("Kosongkan") if saved_date in ("", "kosong")
+                        else 0,
+                        help="Kosongkan meninggalkan garis titik-titik untuk "
+                             "diisi tangan saat surat ditandatangani.")
         picked = st.date_input("Tanggal", value=dt.date.today(),
-                               disabled=use_today, format="YYYY-MM-DD",
-                               key=f"date_{rev}")
+                               disabled=mode != "Pilih tanggal",
+                               format="YYYY-MM-DD", key=f"date_{rev}",
+                               label_visibility="collapsed")
 
     rule("Rincian")
     with st.expander("Isi & ketentuan surat"):
@@ -1110,7 +1116,8 @@ cfg = {
         "type": types[0] if types else "umum",
         "number": number,
         "place": place,
-        "date": "auto" if use_today else picked.isoformat(),
+        "date": {"Hari ini": "auto", "Kosongkan": ""}.get(mode,
+                                                          picked.isoformat()),
         "substitution_right": substitution,
         "valid_until": valid_until,
         "footnote": footnote,

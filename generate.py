@@ -171,9 +171,20 @@ def get(cfg: dict, path: str, default=None):
     return default if node in (None, "") else node
 
 
+# A letter can go out undated, with a dotted line to fill in at the counter.
+BLANK_DATE = ("", "kosong", "none", "blank", "-")
+
+
 def format_date_id(value) -> str:
-    """date/datetime, 'YYYY-MM-DD', 'auto'/empty, or free text -> Indonesian date."""
-    if value in (None, "", "auto", "today"):
+    """date/datetime, 'YYYY-MM-DD', 'auto' or free text -> Indonesian date.
+
+    Returns "" when the date is meant to stay open: an empty string, or one of
+    the words for it. A missing key still means today, so old configs keep
+    behaving the way they did.
+    """
+    if isinstance(value, str) and value.strip().lower() in BLANK_DATE:
+        return ""
+    if value in (None, "auto", "today", "hari ini"):
         value = _dt.date.today()
     if isinstance(value, _dt.datetime):
         value = value.date()
@@ -633,6 +644,7 @@ class LetterBuilder:
 
         place = get(cfg, "document.place", principal.get("city", ""))
         date = format_date_id(cfg.get("document", {}).get("date"))
+        dated = f"<b>{esc(date)}</b>" if date else self._dots(w * 0.22)
         story += [
             Spacer(1, sp * 1.6),
             Paragraph(
@@ -643,7 +655,7 @@ class LetterBuilder:
             Spacer(1, sp * 0.4),
             Paragraph(
                 f"Dibuat dan ditandatangani di <b>{esc(place)}</b> "
-                f"pada tanggal <b>{esc(date)}</b>",
+                f"pada tanggal {dated}",
                 self.style_left,
             ),
             Spacer(1, sp * 2.4),
@@ -1103,7 +1115,9 @@ def main(argv=None) -> int:
                     help="print a form: agent details become dotted lines")
     ap.add_argument("--blank-principal", action="store_true",
                     help="print a form: principal details become dotted lines")
-    ap.add_argument("--date", help="override [document].date (YYYY-MM-DD or text)")
+    ap.add_argument("--date",
+                    help="override [document].date: YYYY-MM-DD, free text, "
+                         "'auto' for today, or '' to leave a dotted line")
     ap.add_argument("--place", help="override [document].place")
     ap.add_argument("--esign", action="store_true",
                     help="e-sign ready: invisible anchor strings, a "
@@ -1177,7 +1191,7 @@ def main(argv=None) -> int:
               f"written for type '{config_type}' but is kept for "
               f"'{types[0]}'.", file=sys.stderr)
 
-    if args.date:
+    if args.date is not None:
         cfg["document"]["date"] = args.date
     if args.place:
         cfg["document"]["place"] = args.place

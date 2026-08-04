@@ -12,7 +12,8 @@ type = "skck"
 
 number = ""              # optional, e.g. "001/SK/VI/2026". Empty = no number line
 place = "Jakarta"        # place of signing. Empty = principal's city
-date = "auto"            # "auto" (today), "2026-06-01", or "1 Juni 2026"
+date = "auto"            # "auto" (today), "2026-06-01", "1 Juni 2026",
+                         # or "" to leave a dotted line to fill in by hand
 substitution_right = false   # true = the agent may delegate the power onward
 valid_until = ""         # optional, e.g. "Surat kuasa ini berlaku sampai dengan 31 Desember 2026."
 clause_label = "K H U S U S"

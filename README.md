@@ -117,7 +117,7 @@ python generate.py --list-types
 | `-d, --dir` | output folder (keeps the config's file pattern) |
 | `--blank-agent` | agent details become dotted lines (fill-in form) |
 | `--blank-principal` | principal details become dotted lines |
-| `--date` | override `[document].date` |
+| `--date` | override `[document].date`; `''` leaves a dotted line |
 | `--place` | override `[document].place` |
 | `--esign` | anchors + `.fields.json` + empty signature fields |
 | `--sign P12` | sign the PDF (PAdES) with a PKCS#12 certificate |
@@ -227,7 +227,8 @@ yourself - the text of each lives in `templates.py`.
 
 ## Config
 
-- `[document]` - `type`, `number`, `place`, `date`, `substitution_right`,
+- `[document]` - `type`, `number`, `place`, `date` (`auto`, a date, free
+  text, or `""` for a dotted line), `substitution_right`,
   `valid_until`, `clause_label`, `footnote`. `purpose` / `powers` / `limits`
   override the template text when set.
 - `[document.stamp]` - `enabled`, `on` (`principal` | `agent` | `both`),
