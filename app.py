@@ -20,6 +20,7 @@ import datetime as dt
 import io
 import json
 import re
+import sys
 import tempfile
 import tomllib
 import zipfile
@@ -298,6 +299,20 @@ def _pack(settings: dict) -> str:
     ).decode("ascii")
 
 
+def _secure_flag() -> str:
+    """`Secure`, unless this is provably plain http (e.g. localhost).
+
+    Behind a reverse proxy (Render and most hosts) Streamlit's own view of
+    the request scheme is unreliable - Streamlit does not enable Tornado's
+    `xheaders`, so `X-Forwarded-Proto` from the proxy is never read and
+    `st.context.url` can misreport https as http. Defaulting to Secure is
+    the safe direction: every deploy target in DEPLOY.md serves https, so an
+    unclear reading should not silently drop the flag.
+    """
+    url = str(getattr(st.context, "url", ""))
+    return "" if url.startswith("http://") else "; Secure"
+
+
 def remember_on_device(cfg: dict) -> None:
     """Keep your setup in a cookie on this device (compressed, ~1 year).
 
@@ -315,11 +330,10 @@ def remember_on_device(cfg: dict) -> None:
                    "hanya data pemberi & penerima kuasa yang diingat. Unduh "
                    "config.toml untuk menyimpan semuanya.")
 
-    secure = "; Secure" if str(getattr(st.context, "url", "")).startswith("https") else ""
     components.html(
         f"""<script>
         document.cookie = "{COOKIE}=" + {json.dumps(payload)} +
-          "; max-age=31536000; path=/; SameSite=Lax{secure}";
+          "; max-age=31536000; path=/; SameSite=Lax{_secure_flag()}";
         </script>""", height=0)
 
 
@@ -332,11 +346,10 @@ def remember_template(label: str, purpose: str, powers: list[str],
         st.warning("Teks suratnya terlalu panjang untuk disimpan di perangkat. "
                    "Persingkat, atau simpan lewat config.toml.")
         return False
-    secure = "; Secure" if str(getattr(st.context, "url", "")).startswith("https") else ""
     components.html(
         f"""<script>
         document.cookie = "{COOKIE_TEMPLATE}=" + {json.dumps(payload)} +
-          "; max-age=31536000; path=/; SameSite=Lax{secure}";
+          "; max-age=31536000; path=/; SameSite=Lax{_secure_flag()}";
         </script>""", height=0)
     return True
 
@@ -347,11 +360,10 @@ def remember_profiles(profiles: list[dict]) -> bool:
     if len(payload) > COOKIE_LIMIT:
         st.warning("Profil tersimpan sudah penuh. Hapus salah satu dulu.")
         return False
-    secure = "; Secure" if str(getattr(st.context, "url", "")).startswith("https") else ""
     components.html(
         f"""<script>
         document.cookie = "{COOKIE_PROFILES}=" + {json.dumps(payload)} +
-          "; max-age=31536000; path=/; SameSite=Lax{secure}";
+          "; max-age=31536000; path=/; SameSite=Lax{_secure_flag()}";
         </script>""", height=0)
     return True
 
@@ -366,7 +378,9 @@ def recall_profiles() -> list[dict]:
     try:
         data = tomllib.loads(zlib.decompress(base64.b64decode(raw)).decode("utf-8"))
         return [p for p in data.get("profile", []) if isinstance(p, dict)]
-    except Exception:
+    except Exception as exc:
+        print(f"Note: {COOKIE_PROFILES} cookie present but unreadable, "
+              f"ignoring it: {exc}", file=sys.stderr)
         return []
 
 
@@ -379,7 +393,9 @@ def recall_template() -> dict | None:
         return None
     try:
         return tomllib.loads(zlib.decompress(base64.b64decode(raw)).decode("utf-8"))
-    except Exception:
+    except Exception as exc:
+        print(f"Note: {COOKIE_TEMPLATE} cookie present but unreadable, "
+              f"ignoring it: {exc}", file=sys.stderr)
         return None
 
 
@@ -404,7 +420,9 @@ def recall_from_device() -> dict | None:
     try:
         text = zlib.decompress(base64.b64decode(raw)).decode("utf-8")
         return tomllib.loads(text)
-    except Exception:
+    except Exception as exc:
+        print(f"Note: {COOKIE} cookie present but unreadable, ignoring it: "
+              f"{exc}", file=sys.stderr)
         return None
 
 
