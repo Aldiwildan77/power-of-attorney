@@ -33,6 +33,7 @@ import streamlit.components.v1 as components
 
 import esign
 from generate import (
+    BLANK_WORDS,
     DEFAULT_ANCHORS,
     LetterBuilder,
     PAGE_SIZES,
@@ -917,10 +918,20 @@ with form_col:
     rule("Tempat & tanggal")
     c1, c2 = st.columns(2)
     with c1:
+        saved_place = document.get("place")
+        place_blank = (isinstance(saved_place, str)
+                       and saved_place.strip().lower() in BLANK_WORDS)
+        place_modes = ["Isi", "Kosongkan"]
+        place_mode = st.radio("Tempat", place_modes, horizontal=True,
+                              key=f"placemode_{rev}",
+                              index=1 if place_blank else 0,
+                              help="Kosongkan meninggalkan garis titik-titik "
+                                   "untuk diisi tangan saat surat "
+                                   "ditandatangani.")
         place = st.text_input("Tempat penandatanganan",
-                              value=str(document.get("place", "")
-                                        or principal.get("city", "")),
-                              key=f"place_{rev}")
+                              value=str(saved_place or principal.get("city", "")),
+                              disabled=place_mode == "Kosongkan",
+                              key=f"place_{rev}", label_visibility="collapsed")
         number = st.text_input("Nomor surat (opsional)",
                                value=str(document.get("number", "") or ""),
                                key=f"number_{rev}")
@@ -963,10 +974,23 @@ with form_col:
                                    value=str(document.get("purpose")
                                              or tpl["purpose"]), height=90,
                                    key=f"purpose_{rev}_{types[0]}")
+            if types[0] == "umum":
+                powers_mode = st.radio(
+                    "Rincian wewenang", ["Template standar", "Kosongkan"],
+                    horizontal=True, key=f"powersmode_{rev}",
+                    help="Kosongkan menghapus daftar bawaan supaya kamu tulis "
+                         "sendiri dari nol.")
+                powers_default = ([] if powers_mode == "Kosongkan"
+                                  else document.get("powers")
+                                       or tpl.get("powers", []))
+                powers_key = f"powers_{rev}_{types[0]}_{powers_mode}"
+            else:
+                powers_default = document.get("powers") or tpl.get("powers", [])
+                powers_key = f"powers_{rev}_{types[0]}"
             powers_text = st.text_area(
                 "Rincian wewenang - satu per baris",
-                value="\n".join(document.get("powers") or tpl.get("powers", [])),
-                height=160, key=f"powers_{rev}_{types[0]}")
+                value="\n".join(powers_default),
+                height=160, key=powers_key)
             limits = st.text_area(
                 "Pembatasan",
                 value=str(document.get("limits") or tpl.get("limits", "")),
@@ -1133,7 +1157,7 @@ cfg = {
     "document": {
         "type": types[0] if types else "umum",
         "number": number,
-        "place": place,
+        "place": "" if place_mode == "Kosongkan" else place,
         "date": {"Hari ini": "auto", "Kosongkan": ""}.get(mode,
                                                           picked.isoformat()),
         "substitution_right": substitution,

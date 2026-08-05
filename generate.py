@@ -171,8 +171,9 @@ def get(cfg: dict, path: str, default=None):
     return default if node in (None, "") else node
 
 
-# A letter can go out undated, with a dotted line to fill in at the counter.
-BLANK_DATE = ("", "kosong", "none", "blank", "-")
+# A letter can go out undated, or unplaced, with a dotted line to fill in at
+# the counter. Shared by the date and the place of signing.
+BLANK_WORDS = ("", "kosong", "none", "blank", "-")
 
 
 def format_date_id(value) -> str:
@@ -182,7 +183,7 @@ def format_date_id(value) -> str:
     the words for it. A missing key still means today, so old configs keep
     behaving the way they did.
     """
-    if isinstance(value, str) and value.strip().lower() in BLANK_DATE:
+    if isinstance(value, str) and value.strip().lower() in BLANK_WORDS:
         return ""
     if value in (None, "auto", "today", "hari ini"):
         value = _dt.date.today()
@@ -196,6 +197,20 @@ def format_date_id(value) -> str:
     except ValueError:
         return text  # already written by hand, e.g. "1 Juni 2026"
     return f"{d.day} {MONTHS_ID[d.month - 1]} {d.year}"
+
+
+def format_place_id(value, fallback: str = "") -> str:
+    """Place of signing, or "" when left open for a dotted line.
+
+    A missing key falls back to the principal's city, same as a missing date
+    means today. An explicit blank ("", "kosong", ...) stays open even when a
+    fallback city is available.
+    """
+    if isinstance(value, str) and value.strip().lower() in BLANK_WORDS:
+        return ""
+    if value is None:
+        return fallback
+    return str(value)
 
 
 def register_font(path: str, fallback: str) -> str:
@@ -642,7 +657,9 @@ class LetterBuilder:
         if valid_until:
             story += [Spacer(1, sp), Paragraph(esc(valid_until), self.style_body)]
 
-        place = get(cfg, "document.place", principal.get("city", ""))
+        place = format_place_id(cfg.get("document", {}).get("place"),
+                                principal.get("city", ""))
+        placed = f"<b>{esc(place)}</b>" if place else self._dots(w * 0.18)
         date = format_date_id(cfg.get("document", {}).get("date"))
         dated = f"<b>{esc(date)}</b>" if date else self._dots(w * 0.22)
         story += [
@@ -654,7 +671,7 @@ class LetterBuilder:
             ),
             Spacer(1, sp * 0.4),
             Paragraph(
-                f"Dibuat dan ditandatangani di <b>{esc(place)}</b> "
+                f"Dibuat dan ditandatangani di {placed} "
                 f"pada tanggal {dated}",
                 self.style_left,
             ),
@@ -1041,7 +1058,7 @@ def interactive(default_config: Path) -> dict:
                                       cfg.get("agent", {}))
     print()
 
-    place = ask("Place of signing",
+    place = ask("Place of signing ('-' to leave open)",
                 str(get(cfg, "document.place", "")
                     or cfg.get("principal", {}).get("city", "")))
     date = ask("Date (YYYY-MM-DD, 'auto', or free text)",
@@ -1071,7 +1088,7 @@ def interactive(default_config: Path) -> dict:
         print(f"  Letter   : {types[0]} - {TEMPLATES[types[0]]['label']}")
     print(f"  Principal: {summarize('principal', blank_principal)}")
     print(f"  Agent    : {summarize('agent', blank_agent)}")
-    print(f"  Place    : {place}")
+    print(f"  Place    : {format_place_id(place) or '(open - dotted line)'}")
     print(f"  Date     : {format_date_id(date)}")
     print(f"  Output   : {files[0]}"
           + (f" (+{len(files) - 1} more)" if batch else ""))
@@ -1118,7 +1135,9 @@ def main(argv=None) -> int:
     ap.add_argument("--date",
                     help="override [document].date: YYYY-MM-DD, free text, "
                          "'auto' for today, or '' to leave a dotted line")
-    ap.add_argument("--place", help="override [document].place")
+    ap.add_argument("--place",
+                    help="override [document].place, or '' to leave a "
+                         "dotted line instead of the principal's city")
     ap.add_argument("--esign", action="store_true",
                     help="e-sign ready: invisible anchor strings, a "
                          ".fields.json with the signature coordinates, and "
@@ -1193,7 +1212,7 @@ def main(argv=None) -> int:
 
     if args.date is not None:
         cfg["document"]["date"] = args.date
-    if args.place:
+    if args.place is not None:
         cfg["document"]["place"] = args.place
     if args.blank_agent:
         cfg.setdefault("agent", {})["blank"] = True
