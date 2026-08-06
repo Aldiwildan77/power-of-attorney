@@ -175,6 +175,9 @@ def get(cfg: dict, path: str, default=None):
 # the counter. Shared by the date and the place of signing.
 BLANK_WORDS = ("", "kosong", "none", "blank", "-")
 
+# Ruled lines drawn when the powers list is left empty on purpose.
+BLANK_POWER_LINES = 3
+
 
 def format_date_id(value) -> str:
     """date/datetime, 'YYYY-MM-DD', 'auto' or free text -> Indonesian date.
@@ -633,15 +636,21 @@ class LetterBuilder:
         purpose, powers, limits = self._clause_text()
         story.append(Paragraph(esc(purpose), self.style_body))
 
+        story += [
+            Spacer(1, sp),
+            Paragraph("Untuk keperluan tersebut, Penerima Kuasa berwenang untuk:",
+                      self.style_body),
+            Spacer(1, sp * 0.6),
+        ]
         if powers:
-            story += [
-                Spacer(1, sp),
-                Paragraph("Untuk keperluan tersebut, Penerima Kuasa berwenang untuk:",
-                          self.style_body),
-                Spacer(1, sp * 0.6),
-            ]
             for i, item in enumerate(powers, start=1):
                 story.append(Paragraph(f"{i}.&nbsp;&nbsp;{esc(item)}", self.style_item))
+        else:
+            # An empty list is a deliberate blank, not a missing value: leave
+            # ruled lines to write the powers in by hand. Unnumbered, so the
+            # count is up to whoever fills it in.
+            for _ in range(BLANK_POWER_LINES):
+                story.append(Paragraph(self._dots(w * 0.86), self.style_item))
 
         if limits:
             story += [Spacer(1, sp), Paragraph(esc(limits), self.style_body)]
