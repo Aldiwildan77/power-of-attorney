@@ -928,10 +928,15 @@ with form_col:
                               help="Kosongkan meninggalkan garis titik-titik "
                                    "untuk diisi tangan saat surat "
                                    "ditandatangani.")
-        place = st.text_input("Tempat penandatanganan",
-                              value=str(saved_place or principal.get("city", "")),
-                              disabled=place_mode == "Kosongkan",
-                              key=f"place_{rev}", label_visibility="collapsed")
+        # A blank is stored as the word "kosong", which belongs in the config,
+        # not in the box: fall back to the city so switching back to Isi lands
+        # on something usable.
+        place = st.text_input(
+            "Tempat penandatanganan",
+            value=str(("" if place_blank else saved_place)
+                      or principal.get("city", "")),
+            disabled=place_mode == "Kosongkan",
+            key=f"place_{rev}", label_visibility="collapsed")
         number = st.text_input("Nomor surat (opsional)",
                                value=str(document.get("number", "") or ""),
                                key=f"number_{rev}")
@@ -1157,9 +1162,14 @@ cfg = {
     "document": {
         "type": types[0] if types else "umum",
         "number": number,
-        "place": "" if place_mode == "Kosongkan" else place,
-        "date": {"Hari ini": "auto", "Kosongkan": ""}.get(mode,
-                                                          picked.isoformat()),
+        # "kosong", not "": an empty string reads as "unset" to get() and to
+        # the filters that build the remembered settings and the share link,
+        # so a blank choice written as "" is dropped and the city and today's
+        # date come back. The word survives every one of those and still
+        # renders as a dotted line.
+        "place": "kosong" if place_mode == "Kosongkan" else place,
+        "date": {"Hari ini": "auto", "Kosongkan": "kosong"}.get(
+            mode, picked.isoformat()),
         "substitution_right": substitution,
         "valid_until": valid_until,
         "footnote": footnote,
@@ -1185,6 +1195,12 @@ if len(types) == 1 and purpose is not None:
     cfg["document"]["powers"] = [p.strip() for p in powers_text.splitlines()
                                  if p.strip()]
     cfg["document"]["limits"] = limits
+
+# Loading a profile bumps form_rev, which rebuilds every widget from `base`.
+# Carry the blank choices back so picking "Kosongkan" and then "Pakai" does
+# not quietly restore the city and today's date.
+st.session_state["base"].setdefault("document", {}).update(
+    place=cfg["document"]["place"], date=cfg["document"]["date"])
 
 missing = [role for role, party in (("pemberi kuasa", principal),
                                     ("penerima kuasa", agent))

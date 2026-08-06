@@ -1280,7 +1280,8 @@ def main(argv=None) -> int:
             field = esign.FIELD_NAMES[args.sign_as]
             esign.sign_pades(
                 result, Path(args.sign), passphrase, field,
-                reason="Surat Kuasa", location=get(cfg, "document.place", "") or "",
+                reason="Surat Kuasa",
+                location=format_place_id(cfg.get("document", {}).get("place")),
             )
             extras.append(f"signed as {field}")
 
