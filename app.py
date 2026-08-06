@@ -273,7 +273,7 @@ def rule(label: str) -> None:
 # Per-letter values are deliberately left out: a letter number and a fixed date
 # belong to one document, not to your setup.
 REMEMBERED_DOCUMENT = ("type", "place", "substitution_right", "valid_until",
-                       "footnote")
+                       "footnote", "blank_types")
 REMEMBERED_LAYOUT = ("paper", "font_size", "fit_one_page",
                      "font", "font_bold")
 # Local storage holds megabytes, so the old 3.5 KB ceiling is gone; this is
@@ -497,7 +497,8 @@ QR_BYTE_LIMIT = 2_900     # a single QR tops out here; the standard says so
 # Setup that may travel in a link. Personal fields are absent by design; only
 # the blank flags come along, since they describe the form, not a person.
 SHARE_DOCUMENT = ("type", "place", "substitution_right", "valid_until",
-                  "footnote", "clause_label", "purpose", "powers", "limits")
+                  "footnote", "clause_label", "purpose", "powers", "limits",
+                  "blank_types")
 SHARE_LAYOUT = ("paper", "font", "font_bold", "font_size", "fit_one_page")
 
 
@@ -1024,6 +1025,24 @@ with form_col:
                                  value=str(document.get("footnote", "") or ""),
                                  placeholder="Lampiran: fotokopi KTP …",
                                  key=f"foot_{rev}")
+        # One choice per selected letter, so a batch can mix a filled letter
+        # with a blank one to write in by hand.
+        saved_blank = [t for t in (document.get("blank_types") or [])
+                       if t in TEMPLATES]
+        blank_types: list[str] = []
+        if types:
+            st.markdown('<p class="sk-note">Rincian wewenang tiap surat.</p>',
+                        unsafe_allow_html=True)
+            for t in types:
+                if st.radio(TEMPLATES[t]["label"],
+                            ["Template standar", "Kosongkan"],
+                            horizontal=True, key=f"bodymode_{rev}_{t}",
+                            index=1 if t in saved_blank else 0,
+                            help="Kosongkan meninggalkan garis titik-titik "
+                                 "untuk diisi tangan setelah dicetak."
+                            ) == "Kosongkan":
+                    blank_types.append(t)
+
         if len(types) == 1:
             tpl = dict(TEMPLATES[types[0]])
             # A letter you wrote yourself starts from your saved version.
@@ -1035,23 +1054,14 @@ with form_col:
                                    value=str(document.get("purpose")
                                              or tpl["purpose"]), height=90,
                                    key=f"purpose_{rev}_{types[0]}")
-            if types[0] == "umum":
-                powers_mode = st.radio(
-                    "Rincian wewenang", ["Template standar", "Kosongkan"],
-                    horizontal=True, key=f"powersmode_{rev}",
-                    help="Kosongkan menghapus daftar bawaan supaya kamu tulis "
-                         "sendiri dari nol.")
-                powers_default = ([] if powers_mode == "Kosongkan"
-                                  else document.get("powers")
-                                       or tpl.get("powers", []))
-                powers_key = f"powers_{rev}_{types[0]}_{powers_mode}"
-            else:
-                powers_default = document.get("powers") or tpl.get("powers", [])
-                powers_key = f"powers_{rev}_{types[0]}"
+            # Disabled rather than cleared when blank: the text is kept, so
+            # switching back to Template standar returns what was typed.
             powers_text = st.text_area(
                 "Rincian wewenang - satu per baris",
-                value="\n".join(powers_default),
-                height=160, key=powers_key)
+                value="\n".join(document.get("powers")
+                                or tpl.get("powers", [])),
+                height=160, disabled=types[0] in blank_types,
+                key=f"powers_{rev}_{types[0]}")
             limits = st.text_area(
                 "Pembatasan",
                 value=str(document.get("limits") or tpl.get("limits", "")),
@@ -1082,8 +1092,9 @@ with form_col:
         else:
             purpose = powers_text = limits = None
             st.info("Beberapa jenis dipilih, jadi tiap surat memakai teks "
-                    "templatenya masing-masing. Pilih satu jenis saja kalau "
-                    "mau menulis isinya sendiri.")
+                    "templatenya masing-masing, atau garis titik-titik kalau "
+                    "dikosongkan di atas. Pilih satu jenis saja kalau mau "
+                    "menulis isinya sendiri.")
 
     with st.expander("Materai, e-sign & tata letak"):
         stamp_enabled = st.checkbox("Sisakan ruang materai",
@@ -1229,6 +1240,7 @@ cfg = {
         "substitution_right": substitution,
         "valid_until": valid_until,
         "footnote": footnote,
+        "blank_types": blank_types,
         "stamp": {"enabled": stamp_enabled, "on": stamp_on,
                   "width_cm": float(stamp.get("width_cm", 3.0)),
                   "height_cm": float(stamp.get("height_cm", 2.0))},

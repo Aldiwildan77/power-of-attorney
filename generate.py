@@ -587,6 +587,11 @@ class LetterBuilder:
         purpose = get(self.cfg, "document.purpose", tpl["purpose"])
         powers = self.cfg.get("document", {}).get("powers", tpl.get("powers", []))
         limits = get(self.cfg, "document.limits", tpl.get("limits", ""))
+        # Listed in blank_types means this letter is meant to go out with its
+        # powers unwritten, whatever text the config happens to carry. Held
+        # per type so one batch can mix filled and blank letters.
+        if doc_type in (self.cfg.get("document", {}).get("blank_types") or []):
+            powers = []
         return purpose, list(powers or []), limits or ""
 
     # -- story -------------------------------------------------------------- #
