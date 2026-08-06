@@ -3,6 +3,10 @@ reportlab==5.0.0
 streamlit==1.60.0
 pypdfium2==5.12.1     # renders the live preview
 
+# Keeps your setup in the browser's local storage instead of a cookie, which
+# holds more and survives longer. The app falls back to a cookie without it.
+streamlit-local-storage==0.0.25
+
 # Optional extras (install if you need them):
 #   pyyaml==6.0.2     YAML configs (.yaml/.yml)
 #   pyhanko==0.36.2   empty AcroForm signature fields (--esign) and PAdES

@@ -10,7 +10,7 @@ Design notes
   view while the form is filled in.
 * No database, no files kept. Letters are rendered into a temporary directory,
   handed to the browser, and the directory is removed. Your details live on
-  your own device - a cookie in this browser, or a config.toml you keep.
+  your own device - this browser's local storage, or a config.toml you keep.
 """
 
 from __future__ import annotations
@@ -30,6 +30,13 @@ from urllib.parse import urlencode
 
 import streamlit as st
 import streamlit.components.v1 as components
+
+try:
+    from streamlit_local_storage import LocalStorage
+except ImportError:
+    # Optional on purpose: without it the app falls back to cookies rather
+    # than refusing to start.
+    LocalStorage = None
 
 import esign
 from generate import (
@@ -66,9 +73,11 @@ LETTER_FONTS = {
     "Helvetica": ("Helvetica / Arial", "Helvetica-Bold"),
 }
 SHARED_ADDRESS = ("address", "rt_rw", "village", "district", "city", "province")
-COOKIE = "sk_details_v1"
-COOKIE_TEMPLATE = "sk_template_v1"
-COOKIE_PROFILES = "sk_profiles_v1"
+# Names in the browser's local storage. The same names were used for the
+# cookies this app wrote before, so an existing visitor keeps their setup.
+KEY_DETAILS = "sk_details_v1"
+KEY_TEMPLATE = "sk_template_v1"
+KEY_PROFILES = "sk_profiles_v1"
 
 st.set_page_config(page_title="Surat Kuasa", page_icon="📄", layout="wide",
                    initial_sidebar_state="collapsed")
@@ -267,7 +276,11 @@ REMEMBERED_DOCUMENT = ("type", "place", "substitution_right", "valid_until",
                        "footnote")
 REMEMBERED_LAYOUT = ("paper", "font_size", "fit_one_page",
                      "font", "font_bold")
-COOKIE_LIMIT = 3500  # browsers cap a cookie at about 4 KB, headers and all
+# Local storage holds megabytes, so the old 3.5 KB ceiling is gone; this is
+# only a guard against writing something absurd. The cookie fallback below
+# still has to live inside the ~4 KB a browser allows, headers and all.
+STORE_LIMIT = 200_000
+COOKIE_LIMIT = 3500
 
 
 def _device_settings(cfg: dict) -> dict:
@@ -314,28 +327,99 @@ def _secure_flag() -> str:
     return "" if url.startswith("http://") else "; Secure"
 
 
-def remember_on_device(cfg: dict) -> None:
-    """Keep your setup in a cookie on this device (compressed, ~1 year).
+def _store():
+    """The browser's local storage, or None when it is not available.
 
-    Streamlit already carries whatever you type to its own process, so this
-    adds no new exposure - and it means the form fills itself next time. The
-    cookie lives on the device; nothing is written to a database or a disk.
+    Local storage outlives a cookie: a cookie written from JavaScript is
+    capped at about a week on Safari, and at 4 KB everywhere. Returning None
+    rather than raising keeps the app usable if the component fails to load,
+    in which case everything below falls back to the cookie this app used to
+    write.
     """
-    settings = _device_settings(cfg)
-    payload = _pack(settings)
-    if len(payload) > COOKIE_LIMIT:
-        # Too much to carry: keep who you are, drop the rest.
-        settings = {k: settings[k] for k in ("principal", "agent")}
-        payload = _pack(settings)
-        st.warning("Setelannya terlalu panjang untuk disimpan di perangkat - "
-                   "hanya data pemberi & penerima kuasa yang diingat. Unduh "
-                   "config.toml untuk menyimpan semuanya.")
+    if LocalStorage is None:
+        return None
+    try:
+        return LocalStorage(key="sk_store")
+    except Exception as exc:
+        print(f"Note: local storage unavailable, using cookies instead: {exc}",
+              file=sys.stderr)
+        return None
 
+
+def _legacy_cookie(name: str) -> str | None:
+    try:
+        return st.context.cookies.get(name)
+    except Exception:
+        return None
+
+
+def _recall_raw(name: str) -> str | None:
+    """Read a packed blob, carrying it over from the old cookie once."""
+    store = _store()
+    if store is not None:
+        try:
+            raw = store.getItem(name)
+        except Exception as exc:
+            print(f"Note: could not read {name} from local storage: {exc}",
+                  file=sys.stderr)
+            raw = None
+        if raw:
+            return raw
+    cookie = _legacy_cookie(name)
+    if cookie and store is not None:
+        try:
+            store.setItem(name, cookie, key=f"move_{name}")
+        except Exception as exc:
+            print(f"Note: could not move {name} into local storage: {exc}",
+                  file=sys.stderr)
+    return cookie
+
+
+def _unpack(raw: str, name: str) -> dict | None:
+    """Undo _pack. A blob we cannot read is ignored, but never in silence."""
+    try:
+        return tomllib.loads(
+            zlib.decompress(base64.b64decode(raw)).decode("utf-8"))
+    except Exception as exc:
+        print(f"Note: {name} is present but unreadable, ignoring it: {exc}",
+              file=sys.stderr)
+        return None
+
+
+def _remember_raw(name: str, payload: str, widget_key: str) -> bool:
+    """Write a packed blob to the device. False means nothing was stored."""
+    if len(payload) > STORE_LIMIT:
+        return False
+    store = _store()
+    if store is not None:
+        try:
+            store.setItem(name, payload, key=widget_key)
+            return True
+        except Exception as exc:
+            print(f"Note: could not write {name} to local storage: {exc}",
+                  file=sys.stderr)
+    # No local storage: the cookie still works, within its own small ceiling.
+    if len(payload) > COOKIE_LIMIT:
+        return False
     components.html(
         f"""<script>
-        document.cookie = "{COOKIE}=" + {json.dumps(payload)} +
+        document.cookie = "{name}=" + {json.dumps(payload)} +
           "; max-age=31536000; path=/; SameSite=Lax{_secure_flag()}";
         </script>""", height=0)
+    return True
+
+
+def remember_on_device(cfg: dict) -> None:
+    """Keep your setup on this device, compressed.
+
+    Streamlit already carries whatever you type to its own process, so this
+    adds no new exposure - and it means the form fills itself next time. It
+    stays in this browser; nothing is written to a database or a disk.
+    """
+    if not _remember_raw(KEY_DETAILS, _pack(_device_settings(cfg)),
+                         "save_details"):
+        st.warning("Setelannya tidak bisa disimpan di browser ini. Unduh "
+                   "config.toml untuk menyimpannya.")
 
 
 def remember_template(label: str, purpose: str, powers: list[str],
@@ -343,88 +427,59 @@ def remember_template(label: str, purpose: str, powers: list[str],
     """Keep a letter the user wrote themselves, on their own device."""
     payload = _pack({"label": label or "Template saya", "purpose": purpose,
                      "powers": powers, "limits": limits})
-    if len(payload) > COOKIE_LIMIT:
-        st.warning("Teks suratnya terlalu panjang untuk disimpan di perangkat. "
+    if not _remember_raw(KEY_TEMPLATE, payload, "save_template"):
+        st.warning("Teks suratnya tidak bisa disimpan di browser ini. "
                    "Persingkat, atau simpan lewat config.toml.")
         return False
-    components.html(
-        f"""<script>
-        document.cookie = "{COOKIE_TEMPLATE}=" + {json.dumps(payload)} +
-          "; max-age=31536000; path=/; SameSite=Lax{_secure_flag()}";
-        </script>""", height=0)
     return True
 
 
 def remember_profiles(profiles: list[dict]) -> bool:
     """Keep a few saved parties on this device, each under its own name."""
-    payload = _pack({"profile": profiles})
-    if len(payload) > COOKIE_LIMIT:
-        st.warning("Profil tersimpan sudah penuh. Hapus salah satu dulu.")
+    if not _remember_raw(KEY_PROFILES, _pack({"profile": profiles}),
+                         "save_profiles"):
+        st.warning("Profil tidak bisa disimpan di browser ini. Unduh "
+                   "config.toml untuk menyimpannya.")
         return False
-    components.html(
-        f"""<script>
-        document.cookie = "{COOKIE_PROFILES}=" + {json.dumps(payload)} +
-          "; max-age=31536000; path=/; SameSite=Lax{_secure_flag()}";
-        </script>""", height=0)
     return True
 
 
 def recall_profiles() -> list[dict]:
-    try:
-        raw = st.context.cookies.get(COOKIE_PROFILES)
-    except Exception:
+    raw = _recall_raw(KEY_PROFILES)
+    data = _unpack(raw, KEY_PROFILES) if raw else None
+    if not data:
         return []
-    if not raw:
-        return []
-    try:
-        data = tomllib.loads(zlib.decompress(base64.b64decode(raw)).decode("utf-8"))
-        return [p for p in data.get("profile", []) if isinstance(p, dict)]
-    except Exception as exc:
-        print(f"Note: {COOKIE_PROFILES} cookie present but unreadable, "
-              f"ignoring it: {exc}", file=sys.stderr)
-        return []
+    return [p for p in data.get("profile", []) if isinstance(p, dict)]
 
 
 def recall_template() -> dict | None:
-    try:
-        raw = st.context.cookies.get(COOKIE_TEMPLATE)
-    except Exception:
-        return None
-    if not raw:
-        return None
-    try:
-        return tomllib.loads(zlib.decompress(base64.b64decode(raw)).decode("utf-8"))
-    except Exception as exc:
-        print(f"Note: {COOKIE_TEMPLATE} cookie present but unreadable, "
-              f"ignoring it: {exc}", file=sys.stderr)
-        return None
-
-
-def forget_on_device() -> None:
-    components.html(
-        f"""<script>
-        document.cookie = "{COOKIE}=; max-age=0; path=/; SameSite=Lax";
-        document.cookie = "{COOKIE_TEMPLATE}=; max-age=0; path=/; SameSite=Lax";
-        document.cookie = "{COOKIE_PROFILES}=; max-age=0; path=/; SameSite=Lax";
-        </script>""", height=0)
+    raw = _recall_raw(KEY_TEMPLATE)
+    return _unpack(raw, KEY_TEMPLATE) if raw else None
 
 
 def recall_from_device() -> dict | None:
     """Read back what this device remembers, if anything."""
-    raw = None
-    try:
-        raw = st.context.cookies.get(COOKIE)
-    except Exception:
-        return None
-    if not raw:
-        return None
-    try:
-        text = zlib.decompress(base64.b64decode(raw)).decode("utf-8")
-        return tomllib.loads(text)
-    except Exception as exc:
-        print(f"Note: {COOKIE} cookie present but unreadable, ignoring it: "
-              f"{exc}", file=sys.stderr)
-        return None
+    raw = _recall_raw(KEY_DETAILS)
+    return _unpack(raw, KEY_DETAILS) if raw else None
+
+
+def forget_on_device() -> None:
+    store = _store()
+    for name in (KEY_DETAILS, KEY_TEMPLATE, KEY_PROFILES):
+        if store is None:
+            continue
+        try:
+            # eraseItem, not deleteItem: deleteItem only blanks the value, and
+            # it pops from its own cache without checking the key is there.
+            store.eraseItem(name, key=f"forget_{name}")
+        except Exception as exc:
+            print(f"Note: could not clear {name}: {exc}", file=sys.stderr)
+    components.html(
+        f"""<script>
+        document.cookie = "{KEY_DETAILS}=; max-age=0; path=/; SameSite=Lax";
+        document.cookie = "{KEY_TEMPLATE}=; max-age=0; path=/; SameSite=Lax";
+        document.cookie = "{KEY_PROFILES}=; max-age=0; path=/; SameSite=Lax";
+        </script>""", height=0)
 
 
 # --------------------------------------------------------------------------- #
@@ -854,8 +909,9 @@ with st.sidebar:
     if remembered:
         line("Tersimpan di perangkat ini.",
              "Data diri, materai, e-sign dan tata letak terisi sendiri saat "
-             "kamu kembali. Disimpan sebagai cookie di browser ini, bukan di "
-             "server.")
+             "kamu kembali. Disimpan di browser ini, bukan di server. "
+             "Membersihkan data browser tetap menghapusnya, jadi unduh "
+             "config.toml kalau mau simpanan yang permanen.")
         if st.button("Lupakan data di perangkat ini", use_container_width=True):
             forget_on_device()
             st.session_state.pop("restored", None)
@@ -1324,8 +1380,8 @@ with preview_col:
 
     st.checkbox("Ingat data ini di perangkat ini", value=True,
                 key=f"remember_{rev}",
-                help="Disimpan sebagai cookie di browser ini, bukan di server. "
-                     "Bisa dihapus lewat sidebar.")
+                help="Disimpan di browser ini, bukan di server. Bisa dihapus "
+                     "lewat sidebar.")
 
     files = st.session_state.get("files")
     if files:
