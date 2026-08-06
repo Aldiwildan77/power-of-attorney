@@ -39,6 +39,7 @@ except ImportError:
     LocalStorage = None
 
 import esign
+from sheet import xlsx_bytes
 from generate import (
     BLANK_WORDS,
     DEFAULT_ANCHORS,
@@ -841,6 +842,53 @@ def stash_upload(upload, name: str) -> str:
     return str(path)
 
 
+# The setup as a table. Sections in the order they appear in the form; the
+# nested ones (materai, kop, footer) become sections of their own so no cell
+# ends up holding a whole table.
+SHEET_SECTIONS = (("document", "Dokumen"), ("principal", "Pemberi Kuasa"),
+                  ("agent", "Penerima Kuasa"), ("esign", "E-sign"),
+                  ("layout", "Tata letak"))
+SHEET_SUBSECTIONS = {"stamp": "Materai", "header": "Kop", "footer": "Footer"}
+
+
+def _sheet_value(value) -> str:
+    if isinstance(value, bool):
+        return "Ya" if value else "Tidak"
+    return str(value)
+
+
+def setup_rows(cfg: dict) -> list[tuple[str, str, str]]:
+    """The current setup as rows: Bagian, Kolom, Isi.
+
+    Same data as config.toml, shaped so a spreadsheet can show it. Empty
+    values are left out, the way the remembered settings leave them out.
+    """
+    rows: list[tuple[str, str, str]] = [("Bagian", "Kolom", "Isi")]
+
+    def walk(section: str, table: dict, party: bool) -> None:
+        for key, value in table.items():
+            if isinstance(value, dict):
+                continue  # taken below, so a section's own fields come first
+            if isinstance(value, (list, tuple)):
+                # A row each, rather than one cell holding the whole list.
+                for i, item in enumerate(value, start=1):
+                    if str(item).strip():
+                        rows.append((section, f"{key} {i}", str(item)))
+            elif value not in (None, ""):
+                rows.append((section,
+                             PARTY_LABELS.get(key, key) if party else key,
+                             _sheet_value(value)))
+        for key, value in table.items():
+            if isinstance(value, dict):
+                walk(SHEET_SUBSECTIONS.get(key, key), value, party)
+
+    for key, section in SHEET_SECTIONS:
+        table = cfg.get(key)
+        if isinstance(table, dict):
+            walk(section, table, key in ("principal", "agent"))
+    return rows
+
+
 def zip_bytes(files: list[tuple[str, bytes]]) -> bytes:
     buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as zf:
@@ -1397,7 +1445,7 @@ with preview_col:
 
     files = st.session_state.get("files")
     if files:
-        d1, d2 = st.columns(2)
+        d1, d2, d3 = st.columns(3)
         with d1:
             if len(files) == 1:
                 st.download_button("Unduh PDF", files[0][1],
@@ -1415,6 +1463,17 @@ with preview_col:
                 mime="text/plain", use_container_width=True,
                 help="Simpan di perangkatmu; muat lagi lewat sidebar, atau "
                      "pakai: python generate.py -c config.toml")
+        with d3:
+            st.download_button(
+                "Simpan .xlsx", xlsx_bytes(setup_rows(cfg), "Surat Kuasa"),
+                file_name="surat-kuasa-data.xlsx",
+                mime="application/vnd.openxmlformats-officedocument."
+                     "spreadsheetml.sheet",
+                use_container_width=True,
+                help="Setelan yang sama dalam bentuk tabel, bisa dibuka di "
+                     "Google Sheets. Berisi nama, NIK dan alamat juga, jadi "
+                     "pikirkan dulu sebelum mengunggahnya ke Drive. Untuk "
+                     "memuat ulang datanya, pakai config.toml.")
         if len(files) > 1:
             with st.expander(f"{len(files)} berkas dalam paket"):
                 for name, data in files:
